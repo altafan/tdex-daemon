@@ -8,9 +8,7 @@ import (
 
 // RepoManager interface defines the methods for swap, price and unspent.
 type RepoManager interface {
-	VaultRepository() domain.VaultRepository
 	MarketRepository() domain.MarketRepository
-	UnspentRepository() domain.UnspentRepository
 	TradeRepository() domain.TradeRepository
 	DepositRepository() domain.DepositRepository
 	WithdrawalRepository() domain.WithdrawalRepository

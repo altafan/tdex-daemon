@@ -23,9 +23,7 @@ type repoManager struct {
 	unspentStore *badgerhold.Store
 
 	marketRepository     domain.MarketRepository
-	unspentRepository    domain.UnspentRepository
 	tradeRepository      domain.TradeRepository
-	vaultRepository      domain.VaultRepository
 	depositRepository    domain.DepositRepository
 	withdrawalRepository domain.WithdrawalRepository
 }
@@ -58,9 +56,7 @@ func NewRepoManager(baseDbDir string, logger badger.Logger) (ports.RepoManager, 
 	}
 
 	marketRepo := NewMarketRepositoryImpl(mainDb, priceDb)
-	unspentRepo := NewUnspentRepositoryImpl(unspentDb, mainDb)
 	tradeRepo := NewTradeRepositoryImpl(mainDb)
-	vaultRepo := NewVaultRepositoryImpl(mainDb)
 	depositRepository := NewDepositRepositoryImpl(mainDb)
 	withdrawalRepository := NewWithdrawalRepositoryImpl(mainDb)
 
@@ -69,9 +65,7 @@ func NewRepoManager(baseDbDir string, logger badger.Logger) (ports.RepoManager, 
 		priceStore:           priceDb,
 		unspentStore:         unspentDb,
 		marketRepository:     marketRepo,
-		unspentRepository:    unspentRepo,
 		tradeRepository:      tradeRepo,
-		vaultRepository:      vaultRepo,
 		depositRepository:    depositRepository,
 		withdrawalRepository: withdrawalRepository,
 	}, nil
@@ -81,16 +75,8 @@ func (d *repoManager) MarketRepository() domain.MarketRepository {
 	return d.marketRepository
 }
 
-func (d *repoManager) UnspentRepository() domain.UnspentRepository {
-	return d.unspentRepository
-}
-
 func (d *repoManager) TradeRepository() domain.TradeRepository {
 	return d.tradeRepository
-}
-
-func (d *repoManager) VaultRepository() domain.VaultRepository {
-	return d.vaultRepository
 }
 
 func (d *repoManager) DepositRepository() domain.DepositRepository {

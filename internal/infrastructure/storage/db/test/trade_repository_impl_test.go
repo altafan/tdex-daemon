@@ -2,6 +2,8 @@ package db_test
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"testing"
 
@@ -302,4 +304,14 @@ func (r tradeRepository) read(query func(context.Context) (interface{}, error)) 
 
 func (r tradeRepository) write(query func(context.Context) (interface{}, error)) (interface{}, error) {
 	return r.DBManager.RunTransaction(context.Background(), false, query)
+}
+
+func randomString(len int) string {
+	return hex.EncodeToString(randomBytes(32))
+}
+
+func randomBytes(len int) []byte {
+	b := make([]byte, len)
+	rand.Read(b)
+	return b
 }

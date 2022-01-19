@@ -67,7 +67,7 @@ func NewMarket(
 	if !isValidAsset(quoteAsset) {
 		return nil, ErrMarketInvalidQuoteAsset
 	}
-	if err := validateAccountIndex(accountIndex); err != nil {
+	if err := isValidAccountIndex(accountIndex); err != nil {
 		return nil, err
 	}
 	if err := validateFee(feeInBasisPoint); err != nil {
@@ -89,4 +89,12 @@ func isValidAsset(asset string) bool {
 		return false
 	}
 	return len(buf) == 32
+}
+
+func isValidAccountIndex(accIndex int) error {
+	if accIndex < 0 {
+		return ErrInvalidAccount
+	}
+
+	return nil
 }

@@ -23,16 +23,6 @@ type tradeInmemoryStore struct {
 	locker               *sync.Mutex
 }
 
-type unspentInmemoryStore struct {
-	unspents map[domain.UnspentKey]domain.Unspent
-	locker   *sync.RWMutex
-}
-
-type vaultInmemoryStore struct {
-	vault  *domain.Vault
-	locker *sync.Mutex
-}
-
 type depositInmemoryStore struct {
 	deposits map[domain.DepositKey]domain.Deposit
 	locker   *sync.RWMutex
@@ -46,15 +36,11 @@ type withdrawalInmemoryStore struct {
 type RepoManager struct {
 	marketStore     *marketInmemoryStore
 	tradeStore      *tradeInmemoryStore
-	unspentStore    *unspentInmemoryStore
-	vaultStore      *vaultInmemoryStore
 	depositStore    *depositInmemoryStore
 	withdrawalStore *withdrawalInmemoryStore
 
 	marketRepository      domain.MarketRepository
-	unspentRepository     domain.UnspentRepository
 	tradeRepository       domain.TradeRepository
-	vaultRepository       domain.VaultRepository
 	depositRepository     domain.DepositRepository
 	withdrawalsRepository domain.WithdrawalRepository
 }
@@ -88,14 +74,6 @@ func NewRepoManager() ports.RepoManager {
 		tradesByMarket:       map[string][]uuid.UUID{},
 		locker:               &sync.Mutex{},
 	}
-	unspentStore := &unspentInmemoryStore{
-		unspents: map[domain.UnspentKey]domain.Unspent{},
-		locker:   &sync.RWMutex{},
-	}
-	vaultStore := &vaultInmemoryStore{
-		vault:  &domain.Vault{},
-		locker: &sync.Mutex{},
-	}
 	depositStore := &depositInmemoryStore{
 		deposits: map[domain.DepositKey]domain.Deposit{},
 		locker:   &sync.RWMutex{},
@@ -107,22 +85,16 @@ func NewRepoManager() ports.RepoManager {
 
 	marketRepo := NewMarketRepositoryImpl(marketStore)
 	tradeRepo := NewTradeRepositoryImpl(tradeStore)
-	unspentRepo := NewUnspentRepositoryImpl(unspentStore)
-	vaultRepo := NewVaultRepositoryImpl(vaultStore)
 	depositRepo := NewDepositRepositoryImpl(depositStore)
 	withdrawalRepo := NewWithdrawalRepositoryImpl(withdrawalStore)
 
 	return &RepoManager{
 		marketStore:           marketStore,
 		tradeStore:            tradeStore,
-		unspentStore:          unspentStore,
-		vaultStore:            vaultStore,
 		depositStore:          depositStore,
 		withdrawalStore:       withdrawalStore,
 		marketRepository:      marketRepo,
 		tradeRepository:       tradeRepo,
-		unspentRepository:     unspentRepo,
-		vaultRepository:       vaultRepo,
 		depositRepository:     depositRepo,
 		withdrawalsRepository: withdrawalRepo,
 	}
@@ -132,16 +104,8 @@ func (d *RepoManager) MarketRepository() domain.MarketRepository {
 	return d.marketRepository
 }
 
-func (d *RepoManager) UnspentRepository() domain.UnspentRepository {
-	return d.unspentRepository
-}
-
 func (d *RepoManager) TradeRepository() domain.TradeRepository {
 	return d.tradeRepository
-}
-
-func (d *RepoManager) VaultRepository() domain.VaultRepository {
-	return d.vaultRepository
 }
 
 func (d *RepoManager) DepositRepository() domain.DepositRepository {
