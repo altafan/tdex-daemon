@@ -171,28 +171,7 @@ func feeListAddressesAction(ctx *cli.Context) error {
 }
 
 func feeClaimAction(ctx *cli.Context) error {
-	outpoints, err := parseOutpoints(ctx.String("outpoints"))
-	if err != nil {
-		return err
-	}
-
-	client, cleanup, err := getOperatorClient(ctx)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
-	if _, err := client.ClaimFeeDeposits(
-		context.Background(), &pb.ClaimFeeDepositsRequest{
-			Outpoints: outpoints,
-		},
-	); err != nil {
-		return err
-	}
-
-	fmt.Println()
-	fmt.Println("fee account is funded")
-
+	printDeprecatedWarn("")
 	return nil
 }
 

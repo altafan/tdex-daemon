@@ -11,9 +11,9 @@ var listutxos = cli.Command{
 	Name:  "listutxos",
 	Usage: "list all utxos for a wallet account",
 	Flags: []cli.Flag{
-		&cli.Uint64Flag{
-			Name:     "account_index",
-			Usage:    "the index of the wallet account for which listing utxos",
+		&cli.StringFlag{
+			Name:     "account_name",
+			Usage:    "the name of the wallet account for which listing utxos",
 			Required: true,
 		},
 		&cli.Uint64Flag{
@@ -36,7 +36,7 @@ func listUtxosAction(ctx *cli.Context) error {
 	}
 	defer cleanup()
 
-	accountIndex := ctx.Uint64("account_index")
+	accountName := ctx.String("account_name")
 	pageNumber := ctx.Int64("page")
 	pageSize := ctx.Int64("page_size")
 	var page *pboperator.Page
@@ -49,8 +49,8 @@ func listUtxosAction(ctx *cli.Context) error {
 
 	resp, err := client.ListUtxos(
 		context.Background(), &pboperator.ListUtxosRequest{
-			AccountIndex: accountIndex,
-			Page:         page,
+			AccountName: accountName,
+			Page:        page,
 		},
 	)
 	if err != nil {

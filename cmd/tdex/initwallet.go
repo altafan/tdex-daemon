@@ -78,16 +78,9 @@ func initWalletAction(ctx *cli.Context) error {
 			return err
 		}
 
-		account := reply.GetAccount()
-		status := reply.GetStatus()
-		data := reply.GetData()
-		if account >= 0 {
-			fmt.Println(data, account, status)
-			continue
-		}
-
-		if macaroon, err := hex.DecodeString(data); err == nil {
-			fmt.Println("admin.macaroon", data)
+		message := reply.GetMessage()
+		if macaroon, err := hex.DecodeString(message); err == nil {
+			message = fmt.Sprintf("admin.macaroon %s", message)
 			// In case the CLI has been configured with a tdexdconnect URL,
 			// the macaroon is written to a file in the CLI's datadir and the
 			// macaroons_path is updated in the config file.
@@ -108,9 +101,8 @@ func initWalletAction(ctx *cli.Context) error {
 					)
 				}
 			}
-		} else {
-			fmt.Println(data, status)
 		}
+		fmt.Println(message)
 	}
 
 	fmt.Println()

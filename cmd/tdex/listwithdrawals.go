@@ -11,9 +11,9 @@ var listwithdrawals = cli.Command{
 	Name:  "listwithdrawals",
 	Usage: "list all withdrawals for a wallet account",
 	Flags: []cli.Flag{
-		&cli.Uint64Flag{
-			Name:     "account_index",
-			Usage:    "the index of the wallet account for which listing withdrawals",
+		&cli.StringFlag{
+			Name:     "account_name",
+			Usage:    "the name of the wallet account for which listing withdrawals",
 			Required: true,
 		},
 		&cli.Uint64Flag{
@@ -36,7 +36,7 @@ func listWithdrawalsAction(ctx *cli.Context) error {
 	}
 	defer cleanup()
 
-	accountIndex := ctx.Int64("account_index")
+	accountName := ctx.String("account_index")
 	pageNumber := ctx.Int64("page")
 	pageSize := ctx.Int64("page_size")
 	var page *pboperator.Page
@@ -49,8 +49,8 @@ func listWithdrawalsAction(ctx *cli.Context) error {
 
 	resp, err := client.ListWithdrawals(
 		context.Background(), &pboperator.ListWithdrawalsRequest{
-			AccountIndex: int64(accountIndex),
-			Page:         page,
+			AccountName: accountName,
+			Page:        page,
 		},
 	)
 	if err != nil {

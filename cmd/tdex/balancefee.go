@@ -19,8 +19,12 @@ func balanceFeeAccountAction(ctx *cli.Context) error {
 
 func printDeprecatedWarn(newCmd string) {
 	colorYellow := "\033[33m"
-	fmt.Println(fmt.Sprintf(
+	message := fmt.Sprintf(
 		"%sWarning: this command is deprecated and will be removed in the next "+
-			"version.\nInstead, use the new command '%s'", string(colorYellow), newCmd,
-	))
+			"version.", string(colorYellow),
+	)
+	if newCmd != "" {
+		message = fmt.Sprintf("%s\nInstead, use the new command '%s'", message, newCmd)
+	}
+	fmt.Println(message)
 }

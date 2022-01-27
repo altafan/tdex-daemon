@@ -11,9 +11,9 @@ var listdeposits = cli.Command{
 	Name:  "listdeposits",
 	Usage: "list all deposits for a wallet account",
 	Flags: []cli.Flag{
-		&cli.Uint64Flag{
-			Name:     "account_index",
-			Usage:    "the index of the account for which listing deposits",
+		&cli.StringFlag{
+			Name:     "account_name",
+			Usage:    "the name of the account for which listing deposits",
 			Required: true,
 		},
 		&cli.Uint64Flag{
@@ -36,7 +36,7 @@ func listDepositsAction(ctx *cli.Context) error {
 	}
 	defer cleanup()
 
-	accountIndex := ctx.Int64("account_index")
+	accountName := ctx.String("account_name")
 	pageNumber := ctx.Int64("page")
 	pageSize := ctx.Int64("page_size")
 	var page *pboperator.Page
@@ -49,8 +49,8 @@ func listDepositsAction(ctx *cli.Context) error {
 
 	resp, err := client.ListDeposits(
 		context.Background(), &pboperator.ListDepositsRequest{
-			AccountIndex: accountIndex,
-			Page:         page,
+			AccountName: accountName,
+			Page:        page,
 		},
 	)
 	if err != nil {

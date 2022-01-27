@@ -360,36 +360,7 @@ func marketListAddressesAction(ctx *cli.Context) error {
 }
 
 func marketClaimAction(ctx *cli.Context) error {
-	outpoints, err := parseOutpoints(ctx.String("outpoints"))
-	if err != nil {
-		return err
-	}
-
-	client, cleanup, err := getOperatorClient(ctx)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-
-	baseAsset, quoteAsset, err := getMarketFromState()
-	if err != nil {
-		return err
-	}
-
-	if _, err := client.ClaimMarketDeposits(
-		context.Background(), &pb.ClaimMarketDepositsRequest{
-			Market: &pbtypes.Market{
-				BaseAsset:  baseAsset,
-				QuoteAsset: quoteAsset,
-			},
-			Outpoints: outpoints,
-		},
-	); err != nil {
-		return err
-	}
-
-	fmt.Println()
-	fmt.Println("market is funded")
+	printDeprecatedWarn("")
 	return nil
 }
 
