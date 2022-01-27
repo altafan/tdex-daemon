@@ -9,6 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/tdex-network/tdex-daemon/internal/core/application"
 	"github.com/tdex-network/tdex-daemon/internal/core/domain"
+	"github.com/tdex-network/tdex-daemon/internal/core/ports"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -63,12 +64,6 @@ func (o operatorHandler) GetFeeBalance(
 	return o.getFeeBalance(ctx, req)
 }
 
-func (o operatorHandler) ClaimFeeDeposits(
-	ctx context.Context, req *pb.ClaimFeeDepositsRequest,
-) (*pb.ClaimFeeDepositsReply, error) {
-	return o.claimFeeDeposits(ctx, req)
-}
-
 func (o operatorHandler) WithdrawFee(
 	ctx context.Context, req *pb.WithdrawFeeRequest,
 ) (*pb.WithdrawFeeReply, error) {
@@ -103,12 +98,6 @@ func (o operatorHandler) GetMarketBalance(
 	ctx context.Context, req *pb.GetMarketBalanceRequest,
 ) (*pb.GetMarketBalanceReply, error) {
 	return o.getMarketBalance(ctx, req)
-}
-
-func (o operatorHandler) ClaimMarketDeposits(
-	ctx context.Context, req *pb.ClaimMarketDepositsRequest,
-) (*pb.ClaimMarketDepositsReply, error) {
-	return o.claimMarketDeposits(ctx, req)
 }
 
 func (o operatorHandler) OpenMarket(
@@ -239,15 +228,6 @@ func (o operatorHandler) ListTrades(
 	return o.listTrades(ctx, req)
 }
 
-func (o operatorHandler) ReloadUtxos(
-	ctx context.Context, rew *pb.ReloadUtxosRequest,
-) (*pb.ReloadUtxosReply, error) {
-	if err := o.operatorSvc.ReloadUtxos(ctx); err != nil {
-		return nil, err
-	}
-	return &pb.ReloadUtxosReply{}, nil
-}
-
 func (o operatorHandler) ListUtxos(
 	ctx context.Context, req *pb.ListUtxosRequest,
 ) (*pb.ListUtxosReply, error) {
@@ -290,19 +270,17 @@ func (o operatorHandler) getInfo(
 	if err != nil {
 		return nil, err
 	}
-	accountInfo := make([]*pb.AccountInfo, 0, len(info.Accounts))
-	for _, a := range info.Accounts {
+	accountInfo := make([]*pb.AccountInfo, 0, len(info.Accounts()))
+	for _, a := range info.Accounts() {
 		accountInfo = append(accountInfo, &pb.AccountInfo{
-			AccountIndex:        a.Index,
-			DerivationPath:      a.DerivationPath,
-			Xpub:                a.Xpub,
-			LastExternalDerived: a.LastExternalDerived,
-			LastInternalDerived: a.LastInternalDerived,
+			AccountIndex:   a.Index(),
+			DerivationPath: a.DerivationPath(),
+			Xpub:           a.Xpub(),
 		})
 	}
 	return &pb.GetInfoReply{
-		RootPath:          info.RootPath,
-		MasterBlindingKey: info.MasterBlindingKey,
+		RootPath:          info.RootPath(),
+		MasterBlindingKey: info.MasterBlindingKey(),
 		AccountInfo:       accountInfo,
 	}, nil
 }
@@ -365,33 +343,14 @@ func (o operatorHandler) getFeeBalance(
 	}, nil
 }
 
-func (o operatorHandler) claimFeeDeposits(
-	ctx context.Context, req *pb.ClaimFeeDepositsRequest,
-) (*pb.ClaimFeeDepositsReply, error) {
-	outpoints := parseOutpoints(req.GetOutpoints())
-
-	if err := o.operatorSvc.ClaimFeeDeposits(ctx, outpoints); err != nil {
-		return nil, err
-	}
-
-	return &pb.ClaimFeeDepositsReply{}, nil
-}
-
 func (o operatorHandler) withdrawFee(
 	ctx context.Context, req *pb.WithdrawFeeRequest,
 ) (*pb.WithdrawFeeReply, error) {
-	args := application.WithdrawFeeReq{
-		Amount:          req.GetAmount(),
-		Address:         req.GetAddress(),
-		Asset:           req.GetAsset(),
-		MillisatPerByte: req.GetMillisatsPerByte(),
-		Push:            true,
-	}
-	if err := args.Validate(); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+	outs := application.Outputs{
+		application.NewOutput(req.GetAddress(), req.GetAsset(), req.GetAmount()),
 	}
 
-	_, txid, err := o.operatorSvc.WithdrawFeeFunds(ctx, args)
+	_, txid, err := o.operatorSvc.WithdrawFeeFunds(ctx, outs, req.GetMillisatsPerByte())
 	if err != nil {
 		return nil, err
 	}
@@ -429,6 +388,14 @@ func (o operatorHandler) getMarketInfo(
 	basePrice, _ := info.Price.BasePrice.BigFloat().Float32()
 	quotePrice, _ := info.Price.QuotePrice.BigFloat().Float32()
 
+	var baseAssetBalance, quoteAssetBalance uint64
+	if b, ok := info.Balance[market.BaseAsset]; ok {
+		baseAssetBalance = b.Total()
+	}
+	if b, ok := info.Balance[market.QuoteAsset]; ok {
+		quoteAssetBalance = b.Total()
+	}
+
 	return &pb.GetMarketInfoReply{
 		Info: &pb.MarketInfo{
 			Market: &pbtypes.Market{
@@ -450,8 +417,8 @@ func (o operatorHandler) getMarketInfo(
 				QuotePrice: quotePrice,
 			},
 			Balance: &pbtypes.Balance{
-				BaseAmount:  info.Balance.BaseAmount,
-				QuoteAmount: info.Balance.QuoteAmount,
+				BaseAmount:  baseAssetBalance,
+				QuoteAmount: quoteAssetBalance,
 			},
 		},
 	}, nil
@@ -519,42 +486,31 @@ func (o operatorHandler) getMarketBalance(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	unlockedBalance, totalBalance, err := o.operatorSvc.GetMarketBalance(
+	balance, err := o.operatorSvc.GetMarketBalance(
 		ctx, market,
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	var totalBaseBalance, availableBaseBalance, totalQuoteBalance, availableQuoteBalance uint64
+	if b, ok := balance[market.BaseAsset]; ok {
+		totalBaseBalance, availableBaseBalance = b.Total(), b.Confirmed()
+	}
+	if b, ok := balance[market.QuoteAsset]; ok {
+		totalQuoteBalance, availableQuoteBalance = b.Total(), b.Confirmed()
+	}
+
 	return &pb.GetMarketBalanceReply{
 		AvailableBalance: &pbtypes.Balance{
-			BaseAmount:  unlockedBalance.BaseAmount,
-			QuoteAmount: unlockedBalance.QuoteAmount,
+			BaseAmount:  availableBaseBalance,
+			QuoteAmount: availableQuoteBalance,
 		},
 		TotalBalance: &pbtypes.Balance{
-			BaseAmount:  totalBalance.BaseAmount,
-			QuoteAmount: totalBalance.QuoteAmount,
+			BaseAmount:  totalBaseBalance,
+			QuoteAmount: totalQuoteBalance,
 		},
 	}, nil
-}
-
-func (o operatorHandler) claimMarketDeposits(
-	ctx context.Context,
-	req *pb.ClaimMarketDepositsRequest,
-) (*pb.ClaimMarketDepositsReply, error) {
-	market, err := parseMarket(req.GetMarket())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-	outpoints := parseOutpoints(req.GetOutpoints())
-
-	if err := o.operatorSvc.ClaimMarketDeposits(
-		ctx, market, outpoints,
-	); err != nil {
-		return nil, err
-	}
-
-	return &pb.ClaimMarketDepositsReply{}, nil
 }
 
 func (o operatorHandler) openMarket(
@@ -643,19 +599,21 @@ func (o operatorHandler) withdrawMarket(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	balanceToWithdraw := parseBalance(req.GetBalanceToWithdraw())
-
-	args := application.WithdrawMarketReq{
-		Market:            market,
-		BalanceToWithdraw: balanceToWithdraw,
-		MillisatPerByte:   req.GetMillisatsPerByte(),
-		Address:           req.GetAddress(),
-		Push:              true,
+	outs := make(application.Outputs, 0)
+	if balanceToWithdraw.BaseAmount > 0 {
+		outs = append(outs, application.NewOutput(
+			req.GetAddress(), market.BaseAsset, balanceToWithdraw.BaseAmount,
+		))
 	}
-	if err := args.Validate(); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+	if balanceToWithdraw.QuoteAmount > 0 {
+		outs = append(outs, application.NewOutput(
+			req.GetAddress(), market.QuoteAsset, balanceToWithdraw.QuoteAmount,
+		))
 	}
 
-	_, txid, err := o.operatorSvc.WithdrawMarketFunds(ctx, args)
+	_, txid, err := o.operatorSvc.WithdrawMarketFunds(
+		ctx, market, outs, uint64(req.GetMillisatsPerByte()),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -826,9 +784,9 @@ func (o operatorHandler) getFeeFragmenterBalance(
 	balance := make(map[string]*pbw.BalanceInfo)
 	for a, b := range info {
 		balance[a] = &pbw.BalanceInfo{
-			ConfirmedBalance:   b.ConfirmedBalance,
-			UnconfirmedBalance: b.UnconfirmedBalance,
-			TotalBalance:       b.TotalBalance,
+			ConfirmedBalance:   b.Confirmed(),
+			UnconfirmedBalance: b.Unconfirmed(),
+			TotalBalance:       b.Total(),
 		}
 	}
 
@@ -932,9 +890,9 @@ func (o operatorHandler) getMarketFragmenterBalance(
 	balance := make(map[string]*pbw.BalanceInfo)
 	for a, b := range info {
 		balance[a] = &pbw.BalanceInfo{
-			ConfirmedBalance:   b.ConfirmedBalance,
-			UnconfirmedBalance: b.UnconfirmedBalance,
-			TotalBalance:       b.TotalBalance,
+			ConfirmedBalance:   b.Confirmed(),
+			UnconfirmedBalance: b.Unconfirmed(),
+			TotalBalance:       b.Total(),
 		}
 	}
 
@@ -1097,6 +1055,14 @@ func (o operatorHandler) listMarkets(
 		basePrice, _ := marketInfo.Price.BasePrice.BigFloat().Float32()
 		quotePrice, _ := marketInfo.Price.QuotePrice.BigFloat().Float32()
 
+		var baseAssetBalance, quoteAssetBalance uint64
+		if b, ok := marketInfo.Balance[marketInfo.Market.BaseAsset]; ok {
+			baseAssetBalance = b.Total()
+		}
+		if b, ok := marketInfo.Balance[marketInfo.Market.QuoteAsset]; ok {
+			quoteAssetBalance = b.Total()
+		}
+
 		pbMarketInfos = append(pbMarketInfos, &pb.MarketInfo{
 			Market: &pbtypes.Market{
 				BaseAsset:  marketInfo.Market.BaseAsset,
@@ -1117,8 +1083,8 @@ func (o operatorHandler) listMarkets(
 				QuotePrice: quotePrice,
 			},
 			Balance: &pbtypes.Balance{
-				BaseAmount:  marketInfo.Balance.BaseAmount,
-				QuoteAmount: marketInfo.Balance.QuoteAmount,
+				BaseAmount:  baseAssetBalance,
+				QuoteAmount: quoteAssetBalance,
 			},
 		})
 	}
@@ -1136,20 +1102,18 @@ func (o operatorHandler) listUtxos(
 			Size:   int(pg.PageSize),
 		}
 	}
-	accountIndex := int(req.GetAccountIndex())
+	accountName := req.GetAccountName()
 
-	utxoInfo, err := o.operatorSvc.ListUtxos(ctx, accountIndex, page)
+	spendableUtxos, lockedUtxos, err := o.operatorSvc.ListUtxos(ctx, accountName, page)
 	if err != nil {
 		return nil, err
 	}
 
-	unspents := toUtxoInfoList(utxoInfo.Unspents)
-	spents := toUtxoInfoList(utxoInfo.Spents)
-	locks := toUtxoInfoList(utxoInfo.Locks)
+	unspents := toUtxoInfoList(spendableUtxos)
+	locks := toUtxoInfoList(lockedUtxos)
 
 	return &pb.ListUtxosReply{
 		Unspents: unspents,
-		Spents:   spents,
 		Locks:    locks,
 	}, nil
 }
@@ -1203,7 +1167,7 @@ func (o operatorHandler) listDeposits(
 ) (*pb.ListDepositsReply, error) {
 	page := parsePage(req.GetPage())
 	deposits, err := o.operatorSvc.ListDeposits(
-		ctx, int(req.GetAccountIndex()), page,
+		ctx, req.GetAccountName(), page,
 	)
 	if err != nil {
 		return nil, err
@@ -1229,8 +1193,8 @@ func (o operatorHandler) listDeposits(
 	}
 
 	return &pb.ListDepositsReply{
-		AccountIndex: req.GetAccountIndex(),
-		Deposits:     depositsProto,
+		AccountName: req.GetAccountName(),
+		Deposits:    depositsProto,
 	}, err
 }
 
@@ -1240,18 +1204,16 @@ func (o operatorHandler) listWithdrawals(
 	page := parsePage(req.GetPage())
 
 	withdrawals, err := o.operatorSvc.ListWithdrawals(
-		ctx, int(req.GetAccountIndex()), page,
+		ctx, req.GetAccountName(), page,
 	)
 
 	withdrawalsProto := make([]*pb.Withdrawal, 0, len(withdrawals))
 	for _, v := range withdrawals {
+
 		ww := &pb.Withdrawal{
-			TxId: v.TxID,
-			Balance: &pbtypes.Balance{
-				BaseAmount:  v.BaseAmount,
-				QuoteAmount: v.QuoteAmount,
-			},
-			Address: v.Address,
+			Txid:           v.TxID,
+			AmountPerAsset: v.TotAmountPerAsset,
+			Addresses:      v.OutputAddresses(),
 		}
 		if v.Timestamp > 0 {
 			ww.TimestampUnix = v.Timestamp
@@ -1261,8 +1223,8 @@ func (o operatorHandler) listWithdrawals(
 	}
 
 	return &pb.ListWithdrawalsReply{
-		AccountIndex: req.GetAccountIndex(),
-		Withdrawals:  withdrawalsProto,
+		AccountName: req.GetAccountName(),
+		Withdrawals: withdrawalsProto,
 	}, err
 }
 
@@ -1278,17 +1240,6 @@ func parseMarket(mkt *pbtypes.Market) (market application.Market, err error) {
 
 	market = m
 	return
-}
-
-func parseOutpoints(outs []*pb.TxOutpoint) []application.TxOutpoint {
-	outpoints := make([]application.TxOutpoint, 0, len(outs))
-	for _, v := range outs {
-		outpoints = append(outpoints, application.TxOutpoint{
-			Hash:  v.Hash,
-			Index: int(v.Index),
-		})
-	}
-	return outpoints
 }
 
 func parsePage(p *pb.Page) *application.Page {
@@ -1348,16 +1299,16 @@ func parseStrategy(sType pb.StrategyType) (domain.StrategyType, error) {
 	return strategyType, nil
 }
 
-func toUtxoInfoList(list []application.UtxoInfo) []*pb.UtxoInfo {
+func toUtxoInfoList(list []ports.Utxo) []*pb.UtxoInfo {
 	res := make([]*pb.UtxoInfo, 0, len(list))
 	for _, u := range list {
 		res = append(res, &pb.UtxoInfo{
 			Outpoint: &pb.TxOutpoint{
-				Hash:  u.Outpoint.Hash,
-				Index: int32(u.Outpoint.Index),
+				Hash:  u.Key().TxID(),
+				Index: int32(u.Key().Index()),
 			},
-			Value: u.Value,
-			Asset: u.Asset,
+			Value: u.Value(),
+			Asset: u.Asset(),
 		})
 	}
 	return res

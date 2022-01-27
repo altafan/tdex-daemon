@@ -81,9 +81,6 @@ type service struct {
 	http2TradeServer    *http.Server
 	muxOperator         cmux.CMux
 	muxTrade            cmux.CMux
-
-	passphraseChan chan application.PassphraseMsg
-	readyChan      chan bool
 }
 
 type ServiceOpts struct {
@@ -223,10 +220,8 @@ func NewService(opts ServiceOpts) (interfaces.Service, error) {
 	}
 
 	return &service{
-		opts:           opts,
-		macaroonSvc:    macaroonSvc,
-		passphraseChan: opts.WalletUnlockerSvc.PassphraseChan(),
-		readyChan:      opts.WalletUnlockerSvc.ReadyChan(),
+		opts:        opts,
+		macaroonSvc: macaroonSvc,
 	}, nil
 }
 
@@ -239,8 +234,12 @@ func (s *service) Start() error {
 
 	log.Infof("wallet unlocker interface is listening on %s", s.opts.OperatorAddress)
 
-	go s.startListeningToPassphraseChan()
-	go s.startListeningToReadyChan()
+	s.opts.WalletUnlockerSvc.RegisterPassphraseChanHandler(
+		s.passphraseChanHandler(),
+	)
+	s.opts.WalletUnlockerSvc.RegisterReadyChanHandler(
+		s.readyChanHandler(),
+	)
 
 	s.grpcOperatorServer = services.grpcOperator
 	s.grpcTradeServer = services.grpcTrade
@@ -379,8 +378,8 @@ func (s *service) stop(stopMacaroonSvc bool) {
 	}
 }
 
-func (s *service) startListeningToPassphraseChan() {
-	for msg := range s.passphraseChan {
+func (s *service) passphraseChanHandler() func(application.PassphraseMsg) {
+	return func(msg application.PassphraseMsg) {
 		if s.withMacaroons() {
 			switch msg.Method {
 			case application.UnlockWallet:
@@ -424,34 +423,32 @@ func (s *service) startListeningToPassphraseChan() {
 	}
 }
 
-func (s *service) startListeningToReadyChan() {
-	isReady := <-s.readyChan
+func (s *service) readyChanHandler() func() {
+	return func() {
+		stopMacaroonSvc := true
+		dontStopMacaroonSvc := !stopMacaroonSvc
+		s.stop(dontStopMacaroonSvc)
 
-	dontStopMacaroonSvc := false
-	s.stop(dontStopMacaroonSvc)
+		withUnlockerOnly := true
+		withAllServices := !withUnlockerOnly
+		services, err := s.start(withAllServices)
+		if err != nil {
+			log.WithError(err).Warn(
+				"an error occured while enabling operator and trade interfaces. Shutting down",
+			)
+			panic(nil)
+		}
 
-	if !isReady {
-		panic("failed to initialize wallet")
+		log.Infof("operator interface is listening on %s", s.opts.OperatorAddress)
+		log.Infof("trade interface is listening on %s", s.opts.TradeAddress)
+
+		s.grpcOperatorServer = services.grpcOperator
+		s.grpcTradeServer = services.grpcTrade
+		s.http1OperatorServer = services.http1Operator
+		s.http2OperatorServer = services.http2Operator
+		s.http1TradeServer = services.http1Trade
+		s.http2TradeServer = services.http2Trade
+		s.muxOperator = services.muxOperator
+		s.muxTrade = services.muxTrade
 	}
-
-	withoutUnlockerOnly := false
-	services, err := s.start(withoutUnlockerOnly)
-	if err != nil {
-		log.WithError(err).Warn(
-			"an error occured while enabling operator and trade interfaces. Shutting down",
-		)
-		panic(nil)
-	}
-
-	log.Infof("operator interface is listening on %s", s.opts.OperatorAddress)
-	log.Infof("trade interface is listening on %s", s.opts.TradeAddress)
-
-	s.grpcOperatorServer = services.grpcOperator
-	s.grpcTradeServer = services.grpcTrade
-	s.http1OperatorServer = services.http1Operator
-	s.http2OperatorServer = services.http2Operator
-	s.http1TradeServer = services.http1Trade
-	s.http2TradeServer = services.http2Trade
-	s.muxOperator = services.muxOperator
-	s.muxTrade = services.muxTrade
 }

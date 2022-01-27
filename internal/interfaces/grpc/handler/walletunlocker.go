@@ -91,25 +91,20 @@ func (w *walletUnlockerHandler) initWallet(
 
 	chReplies := make(chan application.InitWalletReply)
 	go w.walletUnlockerSvc.InitWallet(
-		stream.Context(),
-		mnemonic,
-		string(password),
-		req.GetRestore(),
-		chReplies,
+		stream.Context(), mnemonic, string(password), req.GetRestore(), chReplies,
 	)
 
-	noReplies := true
+	isAlreadyInitialized := false
 	for reply := range chReplies {
 		if err := reply.Err; err != nil {
 			return err
 		}
-
-		noReplies = false
-		if err := stream.Send(&pb.InitWalletReply{
-			Account: reply.AccountIndex,
-			Status:  pb.InitWalletReply_Status(reply.Status),
-			Data:    reply.Data,
-		}); err != nil {
+		if reply == application.WalletInitializedReply {
+			isAlreadyInitialized = true
+		}
+		if err := stream.Send(
+			&pb.InitWalletReply{Message: reply.Message},
+		); err != nil {
 			return err
 		}
 	}
@@ -119,24 +114,23 @@ func (w *walletUnlockerHandler) initWallet(
 	// If the reply channel didn't contain any message before closing, it means
 	// that the app service skipped the operation because the wallet was already
 	// initialized.
-	if !noReplies && w.adminMacaroonPath != "" {
+	if !isAlreadyInitialized && w.adminMacaroonPath != "" {
 		var mac []byte
+		var err error
 		// Retry reading the admin.macaroon file until it's found in the datadir.
 		for {
-			var err error
 			mac, err = ioutil.ReadFile(w.adminMacaroonPath)
 			if err != nil {
 				if os.IsNotExist(err) {
 					continue
 				}
-				return nil
+				return err
 			}
 			break
 		}
 		macStr := hex.EncodeToString(mac)
 		if err := stream.Send(&pb.InitWalletReply{
-			Data:    macStr,
-			Account: -1,
+			Message: macStr,
 		}); err != nil {
 			return err
 		}
@@ -186,12 +180,15 @@ func (w *walletUnlockerHandler) changePassword(
 func (w *walletUnlockerHandler) isReady(
 	ctx context.Context, _ *pb.IsReadyRequest,
 ) (*pb.IsReadyReply, error) {
-	status := w.walletUnlockerSvc.IsReady(ctx)
+	status, err := w.walletUnlockerSvc.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	return &pb.IsReadyReply{
-		Initialized: status.Initialized,
-		Unlocked:    status.Unlocked,
-		Synced:      status.Synced,
+		Initialized: status.IsInitialized(),
+		Unlocked:    status.IsUnlocked(),
+		Synced:      status.IsSynced(),
 	}, nil
 }
 

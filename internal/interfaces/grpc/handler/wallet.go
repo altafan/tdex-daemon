@@ -32,46 +32,41 @@ func newWalletHandler(
 }
 
 func (w walletHandler) WalletAddress(
-	ctx context.Context,
-	req *pb.WalletAddressRequest,
+	ctx context.Context, req *pb.WalletAddressRequest,
 ) (*pb.WalletAddressReply, error) {
 	return w.walletAddress(ctx, req)
 }
 
 func (w walletHandler) WalletBalance(
-	ctx context.Context,
-	req *pb.WalletBalanceRequest,
+	ctx context.Context, req *pb.WalletBalanceRequest,
 ) (*pb.WalletBalanceReply, error) {
 	return w.walletBalance(ctx, req)
 }
 
 func (w walletHandler) SendToMany(
-	ctx context.Context,
-	req *pb.SendToManyRequest,
+	ctx context.Context, req *pb.SendToManyRequest,
 ) (*pb.SendToManyReply, error) {
 	return w.sendToMany(ctx, req)
 }
 
 func (w walletHandler) walletAddress(
-	ctx context.Context,
-	req *pb.WalletAddressRequest,
+	ctx context.Context, req *pb.WalletAddressRequest,
 ) (*pb.WalletAddressReply, error) {
-	addr, blindingKey, err := w.walletSvc.GenerateAddressAndBlindingKey(ctx)
+	info, err := w.walletSvc.GenerateAddressAndBlindingKey(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return &pb.WalletAddressReply{
-		Address:  addr,
-		Blinding: blindingKey,
+		Address:  info.Address,
+		Blinding: info.BlindingKey,
 	}, nil
 }
 
 func (w walletHandler) walletBalance(
-	ctx context.Context,
-	req *pb.WalletBalanceRequest,
+	ctx context.Context, req *pb.WalletBalanceRequest,
 ) (*pb.WalletBalanceReply, error) {
-	b, err := w.walletSvc.GetWalletBalance(ctx)
+	b, err := w.walletSvc.GetBalance(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -79,9 +74,9 @@ func (w walletHandler) walletBalance(
 	balance := make(map[string]*pb.BalanceInfo)
 	for k, v := range b {
 		balance[k] = &pb.BalanceInfo{
-			TotalBalance:       v.TotalBalance,
-			ConfirmedBalance:   v.ConfirmedBalance,
-			UnconfirmedBalance: v.UnconfirmedBalance,
+			TotalBalance:       v.Total(),
+			ConfirmedBalance:   v.Confirmed(),
+			UnconfirmedBalance: v.Unconfirmed(),
 		}
 	}
 
@@ -101,21 +96,14 @@ func (w walletHandler) sendToMany(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	outputs := make([]application.TxOut, 0)
+	outputs := make(application.Outputs, 0)
 	for _, v := range outs {
-		outputs = append(outputs, application.TxOut{
-			Asset:   v.GetAsset(),
-			Value:   v.GetValue(),
-			Address: v.GetAddress(),
-		})
+		outputs = append(outputs, application.NewOutput(
+			v.GetAddress(), v.GetAsset(), uint64(v.GetValue()),
+		))
 	}
 
-	walletReq := application.SendToManyRequest{
-		Outputs:         outputs,
-		MillisatPerByte: msatPerByte,
-		Push:            true,
-	}
-	rawTx, txid, err := w.walletSvc.SendToMany(ctx, walletReq)
+	rawTx, txid, err := w.walletSvc.SendToMany(ctx, outputs, uint64(msatPerByte))
 	if err != nil {
 		return nil, err
 	}
