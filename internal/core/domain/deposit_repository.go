@@ -11,12 +11,12 @@ type DepositRepository interface {
 	// ListDepositsForAccount returns the list of deposits related to the given
 	// wallet account id.
 	ListDepositsForAccount(
-		ctx context.Context, accountIndex int,
+		ctx context.Context, accountName string,
 	) ([]Deposit, error)
 	// ListDepositsForAccountAndPage returns a page containing a subset of the
 	// list of deposits related to the given wallet account id.
 	ListDepositsForAccountAndPage(
-		ctx context.Context, accountIndex int, page Page,
+		ctx context.Context, accountName string, page Page,
 	) ([]Deposit, error)
 	// ListAllDeposits returns all deposits related to all wallet accounts stored
 	// in the repository.

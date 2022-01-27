@@ -6,6 +6,21 @@ import (
 	"github.com/google/uuid"
 )
 
+type TradeEventType int
+
+const (
+	TradeProposedEvent TradeEventType = iota
+	TradeAcceptedEvent
+	TradeCompletedEvent
+	TradeSettledEvent
+	TradeExpiredEvent
+)
+
+type TradeEvent struct {
+	EventType TradeEventType
+	Trade     Trade
+}
+
 // TradeRepository is the abstraction for any kind of database intended to
 // persist Trades.
 type TradeRepository interface {
@@ -51,4 +66,7 @@ type TradeRepository interface {
 		tradeID *uuid.UUID,
 		updateFn func(t *Trade) (*Trade, error),
 	) error
+	// EventChannel returns the channel to receive info about relevant events
+	// happening within the repository.
+	EventChannel() chan TradeEvent
 }

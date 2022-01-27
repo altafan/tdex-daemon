@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 	pkgswap "github.com/tdex-network/tdex-daemon/pkg/swap"
 	"github.com/tdex-network/tdex-daemon/pkg/transactionutil"
-	"github.com/tdex-network/tdex-daemon/pkg/wallet"
 	pbswap "github.com/tdex-network/tdex-protobuf/generated/go/swap"
 	"google.golang.org/protobuf/proto"
 )
@@ -141,9 +140,9 @@ func (p swapParser) SerializeComplete(accMsg []byte, tx string) (string, []byte,
 	// If the tx is not in hex format, let's make sure that the pset can be
 	// finalized  and the final raw transaction extracted.
 	if _, err := hex.DecodeString(tx); err != nil {
-		if _, _, err := wallet.FinalizeAndExtractTransaction(wallet.FinalizeAndExtractTransactionOpts{
-			PsetBase64: tx,
-		}); err != nil {
+		if _, _, err := transactionutil.FinalizeAndExtractTransaction(
+			tx,
+		); err != nil {
 			return "", nil, &SwapError{err, int(pkgswap.ErrCodeFailedToComplete)}
 		}
 	}
@@ -207,9 +206,7 @@ func (m psetManager) GetTxID(psetBase64 string) (string, error) {
 }
 
 func (m psetManager) GetTxHex(psetBase64 string) (string, error) {
-	txHex, _, err := wallet.FinalizeAndExtractTransaction(
-		wallet.FinalizeAndExtractTransactionOpts{PsetBase64: psetBase64},
-	)
+	txHex, _, err := transactionutil.FinalizeAndExtractTransaction(psetBase64)
 	if err != nil {
 		return "", err
 	}

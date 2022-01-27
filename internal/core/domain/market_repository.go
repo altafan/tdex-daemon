@@ -7,13 +7,15 @@ type MarketRepository interface {
 	// Retrieves a market with the given account index. If not found, a new entry shall be created.
 	GetOrCreateMarket(ctx context.Context, market *Market) (*Market, error)
 	// Retrieves a market with a given account index.
-	GetMarketByAccount(ctx context.Context, accountIndex int) (market *Market, err error)
+	GetMarketByAccount(ctx context.Context, accountIndex uint64) (market *Market, err error)
+	// Retrieves a market with a given account name.
+	GetMarketByName(
+		ctx context.Context, accountName string,
+	) (market *Market, accountIndex int, err error)
 	// Retrieves a market with a given a quote asset hash.
 	GetMarketByAssets(
 		ctx context.Context, baseAsset, quoteAsset string,
 	) (market *Market, accountIndex int, err error)
-	// Retrieves the latest market sorted by account index
-	GetLatestMarket(ctx context.Context) (market *Market, accountIndex int, err error)
 	// Retrieves all the markets that are open for trading
 	GetTradableMarkets(ctx context.Context) ([]Market, error)
 	// Retrieves all the markets
@@ -22,14 +24,14 @@ type MarketRepository interface {
 	// at an higher level the possible errors, an update closure function shall be passed
 	UpdateMarket(
 		ctx context.Context,
-		accountIndex int,
+		accountIndex uint64,
 		updateFn func(m *Market) (*Market, error),
 	) error
 	// Open and close trading activities for a market with the given quote asset hash
-	OpenMarket(ctx context.Context, accountIndex int) error
-	CloseMarket(ctx context.Context, accountIndex int) error
+	OpenMarket(ctx context.Context, accountIndex uint64) error
+	CloseMarket(ctx context.Context, accountIndex uint64) error
 	// Update only the price without touching market details
-	UpdatePrices(ctx context.Context, accountIndex int, prices Prices) error
+	UpdatePrices(ctx context.Context, accountIndex uint64, prices Prices) error
 	// DeleteMarket deletes market for accountIndex
-	DeleteMarket(ctx context.Context, accountIndex int) error
+	DeleteMarket(ctx context.Context, accountIndex uint64) error
 }

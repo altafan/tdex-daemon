@@ -58,36 +58,6 @@ var (
 	ErrMarketPreviewAmountTooBig = errors.New("provided amount is too big")
 )
 
-// Unspent errors
-var (
-	// ErrUnspentAlreadyLocked ...
-	ErrUnspentAlreadyLocked = errors.New("cannot lock an already locked unspent")
-)
-
-// Account errors
-var (
-	// ErrInvalidAccount ...
-	ErrInvalidAccount = errors.New("account index must be a positive integer number")
-)
-
-// Vault errors
-var (
-	// ErrVaultMustBeLocked is thrown when trying to change the passphrase with an unlocked wallet
-	ErrVaultMustBeLocked = errors.New("wallet must be locked to perform this operation")
-	// ErrVaultMustBeUnlocked is thrown when trying to make an operation that requires the wallet to be unlocked
-	ErrVaultMustBeUnlocked = errors.New("wallet must be unlocked to perform this operation")
-	// ErrVaultInvalidPassphrase ...
-	ErrVaultInvalidPassphrase = errors.New("passphrase is not valid")
-	// ErrVaultAlreadyInitialized ...
-	ErrVaultAlreadyInitialized = errors.New("vault is already initialized")
-	// ErrVaultNullMnemonicOrPassphrase ...
-	ErrVaultNullMnemonicOrPassphrase = errors.New("mnemonic and/or passphrase must not be null")
-	// ErrVaultNullNetwork ...
-	ErrVaultNullNetwork = errors.New("network must not be null")
-	// ErrVaultAccountNotFound ...
-	ErrVaultAccountNotFound = errors.New("account not found")
-)
-
 // Trade errors
 var (
 	// ErrTradeMustBeEmpty ...

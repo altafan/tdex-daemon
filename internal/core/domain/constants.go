@@ -1,13 +1,6 @@
 package domain
 
 const (
-	FeeAccount = iota
-	WalletAccount
-	FeeFragmenterAccount
-	MarketFragmenterAccount
-	UnusedAccount3
-	MarketAccountStart
-
 	ExternalChain = 0
 	InternalChain = 1
 

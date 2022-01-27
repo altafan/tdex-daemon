@@ -15,7 +15,7 @@ const (
 func TestNewMarket(t *testing.T) {
 	t.Parallel()
 
-	accountIndex := 0
+	accountIndex := uint64(0)
 	fee := int64(25)
 
 	m, err := domain.NewMarket(accountIndex, baseAsset, quoteAsset, fee)
@@ -35,13 +35,12 @@ func TestFailingNewMarket(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		accountIndex  int
+		accountIndex  uint64
 		baseAsset     string
 		quoteAsset    string
 		fee           int64
 		expectedError error
 	}{
-		{"invalid_account", -1, baseAsset, quoteAsset, 25, domain.ErrInvalidAccount},
 		{"invalid_base_asset", 0, "", quoteAsset, 25, domain.ErrMarketInvalidBaseAsset},
 		{"invalid_quote_asset", 0, baseAsset, "invalidquoteasset", 25, domain.ErrMarketInvalidQuoteAsset},
 		{"fee_too_low", 0, baseAsset, quoteAsset, -1, domain.ErrMarketFeeTooLow},

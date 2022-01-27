@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/hex"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/shopspring/decimal"
 	mm "github.com/tdex-network/tdex-daemon/pkg/marketmaking"
 	"github.com/tdex-network/tdex-daemon/pkg/marketmaking/formula"
@@ -16,7 +17,8 @@ type FixedFee struct {
 // Market defines the Market entity data structure for holding an asset pair state
 type Market struct {
 	// AccountIndex links a market to a HD wallet account derivation.
-	AccountIndex int
+	AccountIndex uint64
+	Name         string
 	BaseAsset    string
 	QuoteAsset   string
 	// Each Market has a different fee expressed in basis point of each swap.
@@ -59,7 +61,7 @@ type PreviewInfo struct {
 // NewMarket returns a new market with an account index, the asset pair and the
 // percentage fee set.
 func NewMarket(
-	accountIndex int, baseAsset, quoteAsset string, feeInBasisPoint int64,
+	accountIndex uint64, baseAsset, quoteAsset string, feeInBasisPoint int64,
 ) (*Market, error) {
 	if !isValidAsset(baseAsset) {
 		return nil, ErrMarketInvalidBaseAsset
@@ -67,20 +69,25 @@ func NewMarket(
 	if !isValidAsset(quoteAsset) {
 		return nil, ErrMarketInvalidQuoteAsset
 	}
-	if err := isValidAccountIndex(accountIndex); err != nil {
-		return nil, err
-	}
 	if err := validateFee(feeInBasisPoint); err != nil {
 		return nil, err
 	}
 
+	name := MarketName(baseAsset, quoteAsset)
 	return &Market{
 		AccountIndex: accountIndex,
+		Name:         name,
 		BaseAsset:    baseAsset,
 		QuoteAsset:   quoteAsset,
 		Fee:          feeInBasisPoint,
 		Strategy:     mm.NewStrategyFromFormula(formula.BalancedReserves{}),
 	}, nil
+}
+
+func MarketName(baseAsset, quoteAsset string) string {
+	buf, _ := hex.DecodeString(baseAsset + quoteAsset)
+	h := chainhash.DoubleHashB(buf)
+	return hex.EncodeToString(h[:4])
 }
 
 func isValidAsset(asset string) bool {
@@ -89,12 +96,4 @@ func isValidAsset(asset string) bool {
 		return false
 	}
 	return len(buf) == 32
-}
-
-func isValidAccountIndex(accIndex int) error {
-	if accIndex < 0 {
-		return ErrInvalidAccount
-	}
-
-	return nil
 }
