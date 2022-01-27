@@ -1,173 +1,157 @@
 package application_test
 
 import (
-	"encoding/hex"
-	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/tdex-network/tdex-daemon/internal/core/application"
-	"github.com/tdex-network/tdex-daemon/internal/core/domain"
-	"github.com/tdex-network/tdex-daemon/pkg/transactionutil"
-	"github.com/tdex-network/tdex-daemon/pkg/wallet"
+	"github.com/tdex-network/tdex-daemon/internal/core/ports"
 )
 
 var (
+	nativeAsset      = "5ac9f65c0efcc4775e0baec4ec03abdde22473cd3cf33c0419ca290e0751b225"
+	marketBaseAsset  = nativeAsset
+	marketFee        = int64(25)
 	marketQuoteAsset = randomHex(32)
-	feeOutpoints     = []application.TxOutpoint{
-		{Hash: randomHex(32), Index: 0},
-		{Hash: randomHex(32), Index: 0},
-	}
-	mktOutpoints = []application.TxOutpoint{
-		{Hash: randomHex(32), Index: 0},
-		{Hash: randomHex(32), Index: 0},
-	}
-)
-
-func TestAccountManagement(t *testing.T) {
-	operatorSvc, err := newOperatorService()
-	require.NoError(t, err)
-
-	feeAddressesAndKeys, err := operatorSvc.GetFeeAddress(ctx, 2)
-	require.NoError(t, err)
-
-	mockedBlinderManager := &mockBlinderManager{}
-	for _, f := range feeAddressesAndKeys {
-		key, _ := hex.DecodeString(f.BlindingKey)
-		mockedBlinderManager.
-			On("UnblindOutput", mock.AnythingOfType("*transaction.TxOutput"), key).
-			Return(application.UnblindedResult(&transactionutil.UnblindedResult{
-				AssetHash:    regtest.AssetID,
-				Value:        randomValue(),
-				AssetBlinder: randomBytes(32),
-				ValueBlinder: randomBytes(32),
-			}), true)
-	}
-
-	time.Sleep(50 * time.Millisecond)
-
-	mkt := application.Market{
+	market           = application.Market{
 		BaseAsset:  marketBaseAsset,
 		QuoteAsset: marketQuoteAsset,
 	}
+	addr                = "el1qq2t8ytye2p9pretecfncchwrwrzq2n87d5ct6eng9926gyxcvskq4vn36ntvm7nyc69zm9xrr2h077ycay9qg04z20w0p95h3"
+	millisatPerByte     = uint64(100)
+	feeBalanceThreshold = uint64(5000)
+)
 
-	err = operatorSvc.NewMarket(ctx, mkt)
-	require.NoError(t, err)
-
-	mktAddressesAndKeys, err := operatorSvc.GetMarketAddress(ctx, mkt, 2)
-	require.NoError(t, err)
-
-	for i, m := range mktAddressesAndKeys {
-		asset := marketBaseAsset
-		if i == 0 {
-			asset = marketQuoteAsset
-		}
-		key, _ := hex.DecodeString(m.BlindingKey)
-		mockedBlinderManager.
-			On("UnblindOutput", mock.Anything, key).
-			Return(application.UnblindedResult(&transactionutil.UnblindedResult{
-				AssetHash:    asset,
-				Value:        randomValue(),
-				AssetBlinder: randomBytes(32),
-				ValueBlinder: randomBytes(32),
-			}), true)
-	}
-
-	time.Sleep(50 * time.Millisecond)
-
-	application.BlinderManager = mockedBlinderManager
-
-	err = operatorSvc.ClaimFeeDeposits(ctx, feeOutpoints)
-	require.NoError(t, err)
-
-	_, feeBalance, err := operatorSvc.GetFeeBalance(ctx)
-	require.NoError(t, err)
-	require.Greater(t, feeBalance, int64(0))
-
-	err = operatorSvc.ClaimMarketDeposits(ctx, mkt, mktOutpoints)
-	require.NoError(t, err)
+func TestAccountManagement(t *testing.T) {
+	operatorSvc := newOperatorService()
 
 	markets, err := operatorSvc.ListMarkets(ctx)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(markets), 1)
-	require.False(t, markets[0].Tradable)
+	require.Len(t, markets, 0)
 
-	err = operatorSvc.OpenMarket(ctx, mkt)
+	marketInfo, err := operatorSvc.GetMarketInfo(ctx, market)
+	require.EqualError(t, err, application.ErrMarketNotExist.Error())
+	require.Nil(t, marketInfo)
+
+	err = operatorSvc.NewMarket(ctx, market)
 	require.NoError(t, err)
 
 	markets, err = operatorSvc.ListMarkets(ctx)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(markets), 1)
+	require.Len(t, markets, 1)
+	require.Equal(t, market.BaseAsset, markets[0].Market.BaseAsset)
+	require.Equal(t, market.QuoteAsset, markets[0].Market.QuoteAsset)
+	require.False(t, markets[0].Tradable)
+	require.Nil(t, markets[0].Balance)
+
+	marketInfo, err = operatorSvc.GetMarketInfo(ctx, market)
+	require.NoError(t, err)
+	require.NotNil(t, marketInfo)
+	require.Equal(t, market.BaseAsset, marketInfo.Market.BaseAsset)
+	require.Equal(t, market.QuoteAsset, marketInfo.Market.QuoteAsset)
+	require.False(t, marketInfo.Tradable)
+	require.Nil(t, marketInfo.Balance)
+
+	// Attempt opening the market while Fee and market account have 0 balance
+	feeBalance, _, err := operatorSvc.GetFeeBalance(ctx)
+	require.NoError(t, err)
+	require.Zero(t, feeBalance)
+
+	err = operatorSvc.OpenMarket(ctx, market)
+	require.EqualError(t, err, application.ErrFeeAccountNotFunded.Error())
+	// Now pretend the Fee account is funded but the market account isn't
+	err = operatorSvc.OpenMarket(ctx, market)
+	require.EqualError(t, err, application.ErrMarketNotFunded.Error())
+	// Now pretend both Fee and market account are funded.
+	// At this point, it should be possible to open the market
+	err = operatorSvc.OpenMarket(ctx, market)
+	require.NoError(t, err)
+
+	markets, err = operatorSvc.ListMarkets(ctx)
+	require.NoError(t, err)
+	require.Len(t, markets, 1)
+	require.Equal(t, market.BaseAsset, markets[0].Market.BaseAsset)
+	require.Equal(t, market.QuoteAsset, markets[0].Market.QuoteAsset)
 	require.True(t, markets[0].Tradable)
+	require.NotNil(t, markets[0].Balance)
 
-	err = operatorSvc.CloseMarket(ctx, mkt)
+	marketInfo, err = operatorSvc.GetMarketInfo(ctx, market)
+	require.NoError(t, err)
+	require.NotNil(t, marketInfo)
+	require.Equal(t, market.BaseAsset, marketInfo.Market.BaseAsset)
+	require.Equal(t, market.QuoteAsset, marketInfo.Market.QuoteAsset)
+	require.True(t, marketInfo.Tradable)
+	require.NotNil(t, marketInfo.Balance)
+
+	// Attempt dropping the market with no 0 balance
+	err = operatorSvc.DropMarket(ctx, market)
+	require.EqualError(t, err, application.ErrMarketIsOpen.Error())
+
+	err = operatorSvc.CloseMarket(ctx, market)
+	require.NoError(t, err)
+
+	err = operatorSvc.DropMarket(ctx, market)
+	require.EqualError(t, err, application.ErrMarketNonZeroBalance.Error())
+
+	// Withdraw all the funds from the market
+	baseAssetBalance := marketInfo.Balance[market.BaseAsset].Total()
+	quoteAssetBalance := marketInfo.Balance[market.QuoteAsset].Total()
+	outputs := []application.Output{
+		application.NewOutput(addr, market.BaseAsset, baseAssetBalance),
+		application.NewOutput(addr, market.QuoteAsset, quoteAssetBalance),
+	}
+
+	// Market is already closed, withdrawals should be allowed
+	txHex, txid, err := operatorSvc.WithdrawMarketFunds(ctx, market, outputs, millisatPerByte)
+	require.NoError(t, err)
+	require.NotNil(t, txHex)
+	require.NotNil(t, txid)
+
+	marketInfo, err = operatorSvc.GetMarketInfo(ctx, market)
+	require.NoError(t, err)
+	require.NotNil(t, marketInfo)
+	require.Equal(t, market.BaseAsset, marketInfo.Market.BaseAsset)
+	require.Equal(t, market.QuoteAsset, marketInfo.Market.QuoteAsset)
+	require.False(t, marketInfo.Tradable)
+	require.Nil(t, marketInfo.Balance)
+
+	// Now dropping the market should be possible
+	err = operatorSvc.DropMarket(ctx, market)
 	require.NoError(t, err)
 
 	markets, err = operatorSvc.ListMarkets(ctx)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(markets), 1)
-	require.False(t, markets[0].Tradable)
+	require.Len(t, markets, 0)
 
-	// TODO: uncomment the line belows after the following issue is fixed:
-	// https://github.com/tdex-network/tdex-daemon/issues/482
-	//
-	// To drop the market it's required to withdraw all the funds first.
-	// The builder/blinder/signer used by the WithdrawMarketFunds should be
-	// detached to be mocked here, but it's currently empbedded and therefore the
-	// market cannot be actually dropped.
+	marketInfo, err = operatorSvc.GetMarketInfo(ctx, market)
+	require.EqualError(t, err, application.ErrMarketNotExist.Error())
+	require.Nil(t, marketInfo)
 
-	// err = operatorSvc.DropMarket(ctx, markets[0].Market)
-	// require.NoError(t, err)
-
-	// markets, err = operatorSvc.ListMarkets(ctx)
-	// require.NoError(t, err)
-	// require.Len(t, markets, 0)
+	marketBalance, err := operatorSvc.GetMarketBalance(ctx, market)
+	require.EqualError(t, err, application.ErrMarketNotExist.Error())
+	require.Nil(t, marketBalance)
 }
 
-// newOperatorService returns a new service with brand new and unlocked wallet.
-func newOperatorService() (application.OperatorService, error) {
-	repoManager, explorerSvc, bcListener := newServices()
+func newOperatorService() application.OperatorService {
+	repoManager, wallet := newServices()
+	accountManager := wallet.(*mockedWallet).accountManager
+	accountManager.On("CreateAccount", mock.Anything, mock.Anything).Return(uint64(randomIntInRange(0, 15)), randomBase64(), nil)
+	accountManager.On("DeleteAccount", mock.Anything, mock.Anything).Return(nil)
 
-	if _, err := repoManager.VaultRepository().GetOrCreateVault(
-		ctx, mnemonic, passphrase, regtest,
-	); err != nil {
-		return nil, err
+	wallet.(*mockedWallet).On("NativeAsset").Return(nativeAsset)
+	wallet.(*mockedWallet).On("BalanceForAccount", mock.Anything, market.Name()).Return(nil, nil).Times(3)
+	wallet.(*mockedWallet).On("BalanceForAccount", mock.Anything, application.FeeAccount).Return(nil, nil).Twice()
+	feeBalance := map[string]ports.Balance{
+		nativeAsset: accountBalance{1000000, 1000000, 0},
 	}
-
-	w, _ := wallet.NewWalletFromMnemonic(wallet.NewWalletFromMnemonicOpts{
-		SigningMnemonic: mnemonic,
-	})
-
-	accounts := []int{domain.FeeAccount, domain.MarketAccountStart}
-	for _, accountIndex := range accounts {
-		for i := 0; i < 2; i++ {
-			addr, _, _ := w.DeriveConfidentialAddress(wallet.DeriveConfidentialAddressOpts{
-				DerivationPath: fmt.Sprintf("%d'/0/%d", accountIndex, i),
-				Network:        regtest,
-			})
-			txid := feeOutpoints[i].Hash
-			if accountIndex == domain.MarketAccountStart {
-				txid = mktOutpoints[i].Hash
-			}
-			explorerSvc.(*mockExplorer).On("GetTransaction", txid).
-				Return(randomTxs(addr)[0], nil)
-		}
+	wallet.(*mockedWallet).On("BalanceForAccount", mock.Anything, application.FeeAccount).Return(feeBalance, nil)
+	marketBalance := map[string]ports.Balance{
+		marketBaseAsset:  accountBalance{100000000, 100000000, 0},
+		marketQuoteAsset: accountBalance{3000000000000, 3000000000000, 0},
 	}
-
-	explorerSvc.(*mockExplorer).
-		On("IsTransactionConfirmed", mock.AnythingOfType("string")).
-		Return(true, nil)
-
-	return application.NewOperatorService(
-		repoManager,
-		explorerSvc,
-		bcListener,
-		marketBaseAsset,
-		"",
-		marketFee,
-		regtest,
-		feeBalanceThreshold,
-	), nil
+	wallet.(*mockedWallet).On("BalanceForAccount", mock.Anything, market.Name()).Return(marketBalance, nil).Times(4)
+	wallet.(*mockedWallet).On("BalanceForAccount", mock.Anything, market.Name()).Return(nil, nil).Twice()
+	wallet.(*mockedWallet).On("SendToManyWithFeeTopup", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(randomHex(100), randomHex(32), nil)
+	return application.NewOperatorService(repoManager, wallet, nil, marketBaseAsset, "", marketFee, feeBalanceThreshold)
 }

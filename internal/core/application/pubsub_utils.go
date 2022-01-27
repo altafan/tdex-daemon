@@ -1,9 +1,7 @@
 package application
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -11,43 +9,27 @@ import (
 	"github.com/tdex-network/tdex-daemon/internal/core/ports"
 )
 
-// checkFeeAndMarketBalances helper to check for low balances for fee and
-// market accounts and to publish AccountLowBalance topic on pubsub just in case.
-func checkFeeAndMarketBalances(
-	repoManager ports.RepoManager, pubsub ports.SecurePubSub,
-	ctx context.Context, mkt *domain.Market, lbtcAsset string, feeThreshold uint64,
+func checkForFeeAndMarketLowBalances(
+	pubsubService ports.SecurePubSub,
+	feeAccountBalance, feeAccountBalanceThreshold uint64,
+	market *domain.Market, marketBalance Balance,
 ) {
-	// Get balance including locked unspents.
-	feeBalance, err := getBalanceForFee(repoManager, ctx, lbtcAsset, false)
-	if err == nil && feeBalance <= feeThreshold {
-		account := map[string]interface{}{
-			"type":  "fee",
-			"index": domain.FeeAccount,
+	if feeAccountBalance < feeAccountBalanceThreshold {
+		account := map[string]string{
+			"name": FeeAccount,
 		}
-		if err := publishAccountLowBalanceTopic(
-			pubsub, account, feeBalance,
-		); err != nil {
-			log.Warn(err)
-		}
+		publishAccountLowBalanceTopic(pubsubService, account, feeAccountBalance)
 	}
 
-	// Get balance including locked unspents.
-	mktBalance, err := getBalanceForMarket(repoManager, ctx, mkt, false)
-	if err == nil {
-		lowBalance := mktBalance.BaseAmount <= uint64(mkt.FixedFee.BaseFee) ||
-			mktBalance.QuoteAmount <= uint64(mkt.FixedFee.QuoteFee)
-		if lowBalance {
-			account := map[string]interface{}{
-				"type":        "market",
-				"base_asset":  mkt.BaseAsset,
-				"quote_asset": mkt.QuoteAsset,
-				"index":       mkt.AccountIndex,
+	if market != nil {
+		if marketBalance.BaseAmount <= uint64(market.FixedFee.BaseFee) ||
+			marketBalance.QuoteAmount <= uint64(market.FixedFee.QuoteFee) {
+			mktAccount := map[string]string{
+				"name":        market.Name,
+				"base_asset":  market.BaseAsset,
+				"quote_asset": market.QuoteAsset,
 			}
-			if err := publishAccountLowBalanceTopic(
-				pubsub, account, mktBalance,
-			); err != nil {
-				log.Warn(err)
-			}
+			publishAccountLowBalanceTopic(pubsubService, mktAccount, marketBalance)
 		}
 	}
 }
@@ -56,9 +38,9 @@ func checkFeeAndMarketBalances(
 // on the given pubsub service.
 func publishAccountLowBalanceTopic(
 	pubsub ports.SecurePubSub, account, balance interface{},
-) error {
+) {
 	if pubsub == nil {
-		return nil
+		return
 	}
 
 	topics := pubsub.TopicsByCode()
@@ -74,21 +56,19 @@ func publishAccountLowBalanceTopic(
 	message, _ := json.Marshal(payload)
 
 	if err := pubsub.Publish(topic.Label(), string(message)); err != nil {
-		return fmt.Errorf(
-			"an error occured while publishing message for topic %s: %s",
-			topic.Label(), err,
+		log.WithError(err).Warnf(
+			"an error occured while publishing message for topic %s", topic.Label(),
 		)
 	}
-	return nil
 }
 
 func publishMarketWithdrawTopic(
 	pubsub ports.SecurePubSub,
-	mkt Market, mktBalance, withdrewBalance Balance,
+	mkt *domain.Market, mktBalance, withdrewBalance Balance,
 	destAddress, txid string,
-) error {
+) {
 	if pubsub == nil {
-		return nil
+		return
 	}
 
 	baseBalance := mktBalance.BaseAmount - withdrewBalance.BaseAmount
@@ -104,6 +84,7 @@ func publishMarketWithdrawTopic(
 		"market": map[string]string{
 			"base_asset":  mkt.BaseAsset,
 			"quote_asset": mkt.QuoteAsset,
+			"name":        mkt.Name,
 		},
 		"amount_withdraw": map[string]interface{}{
 			"base_amount":  withdrewBalance.BaseAmount,
@@ -123,16 +104,15 @@ func publishMarketWithdrawTopic(
 			topic.Label(),
 		)
 	}
-	return nil
 }
 
 func publishFeeWithdrawTopic(
 	pubsub ports.SecurePubSub,
 	balance, withdrewBalance uint64,
 	destAddress, txid, lbtcAsset string,
-) error {
+) {
 	if pubsub == nil {
-		return nil
+		return
 	}
 
 	lbtcBalance := balance - withdrewBalance
@@ -163,16 +143,15 @@ func publishFeeWithdrawTopic(
 			topic.Label(),
 		)
 	}
-	return nil
 }
 
 func publishTradeSettledTopic(
 	pubsub ports.SecurePubSub,
 	trade *domain.Trade, marketBaseAsset string,
 	baseBalance, quoteBalance uint64,
-) error {
+) {
 	if pubsub == nil {
-		return nil
+		return
 	}
 
 	topics := pubsub.TopicsByCode()
@@ -211,5 +190,4 @@ func publishTradeSettledTopic(
 			topic.Label(),
 		)
 	}
-	return nil
 }

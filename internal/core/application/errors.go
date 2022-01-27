@@ -19,10 +19,6 @@ var (
 	ErrMarketNotExist = errors.New("market does not exist")
 	// ErrMarketNotFunded ...
 	ErrMarketNotFunded = errors.New("market account not funded")
-	// ErrInvalidOutpoint ...
-	ErrInvalidOutpoint = errors.New("outpoint refers to inexistent tx output")
-	// ErrInvalidOutpoints ...
-	ErrInvalidOutpoints = errors.New("all outpoints must be funded for the same account")
 	// ErrServiceUnavailable is the error returned by the trade service in case of
 	// internal errors
 	ErrServiceUnavailable = errors.New("service is unavailable, try again later")
@@ -63,5 +59,13 @@ var (
 	ErrMissingWithdrawAddress = errors.New("address must not be null")
 	// ErrMarketNonZeroBalance is returned when trying to drop a market that still
 	// owns some base or quote asset funds.
-	ErrMarketNonZeroBalance = errors.New("withdraw funds from market before deleting")
+	ErrMarketNonZeroBalance = errors.New(
+		"market must have zero balance to delete the account. " +
+			"Please withdraw all funds and retry",
+	)
+	ErrMarketIsOpen = errors.New(
+		"market is open while requested operation requires it to be closed",
+	)
+	// ErrWalletUnknownStatus is returned if the ocean wallet is in such state.
+	ErrWalletUnknownStatus = errors.New("wallet is in unknown status")
 )

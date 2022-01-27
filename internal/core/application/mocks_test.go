@@ -1,373 +1,472 @@
 package application_test
 
 import (
-	"strings"
-	"sync"
+	"context"
 	"time"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/tdex-network/tdex-daemon/internal/core/application"
 	"github.com/tdex-network/tdex-daemon/internal/core/domain"
-	"github.com/tdex-network/tdex-daemon/pkg/explorer"
-	"github.com/vulpemventures/go-elements/address"
-	"github.com/vulpemventures/go-elements/network"
-	"github.com/vulpemventures/go-elements/transaction"
+	"github.com/tdex-network/tdex-daemon/internal/core/ports"
 )
 
-// **** BlinderMager ****
-type mockBlinderManager struct {
+// **** Wallet Managers ****
+
+type walletStatus struct {
+	initialized bool
+	synced      bool
+	unlocked    bool
+}
+
+func (s walletStatus) IsInitialized() bool {
+	return s.initialized
+}
+func (s walletStatus) IsSynced() bool {
+	return s.synced
+}
+func (s walletStatus) IsUnlocked() bool {
+	return s.unlocked
+}
+
+type mockedWalletManager struct {
 	mock.Mock
 }
 
-func (m *mockBlinderManager) UnblindOutput(
-	txout *transaction.TxOutput,
-	key []byte,
-) (application.UnblindedResult, bool) {
-	args := m.Called(txout, key)
-
-	var res application.UnblindedResult
+func (m *mockedWalletManager) GenSeed(ctx context.Context) ([]string, error) {
+	args := m.Called(ctx)
+	var res []string
 	if a := args.Get(0); a != nil {
-		res = a.(application.UnblindedResult)
+		res = a.([]string)
 	}
-	var res1 bool
-	if a := args.Get(1); a != nil {
-		res1 = a.(bool)
-	}
-	return res, res1
+	return res, args.Error(1)
 }
 
-// **** TradeManager ****
+func (m *mockedWalletManager) CreateWallet(
+	ctx context.Context, mnemonic []string, passphrase string,
+	chMessages chan string,
+) error {
+	defer close(chMessages)
+	args := m.Called(ctx, mnemonic, passphrase, chMessages)
+	err := args.Error(0)
+	if err == nil {
+		chMessages <- "creating wallet"
+		time.Sleep(time.Second)
+		chMessages <- "wallet creation succeeded"
+	}
 
-type mockTradeManager struct {
+	return err
+}
+
+func (m *mockedWalletManager) RestoreWallet(
+	ctx context.Context, mnemonic []string, passphrase string,
+	chMessages chan string,
+) error {
+	defer close(chMessages)
+	args := m.Called(ctx, mnemonic, passphrase, chMessages)
+	err := args.Error(0)
+	if err == nil {
+		chMessages <- "restoring wallet"
+		time.Sleep(200 * time.Millisecond)
+		chMessages <- "restoring accounts"
+		time.Sleep(200 * time.Millisecond)
+		chMessages <- "restored 2 accounts"
+		time.Sleep(200 * time.Millisecond)
+		chMessages <- "restoring utxo set for discovered accounts"
+		time.Sleep(600 * time.Millisecond)
+		chMessages <- "restored utxo set for discovered accounts"
+		time.Sleep(600 * time.Millisecond)
+		chMessages <- "wallet restoration succeeded"
+	}
+	return err
+}
+
+func (m *mockedWalletManager) Unlock(ctx context.Context, passphrase string) error {
+	args := m.Called(ctx, passphrase)
+	return args.Error(0)
+}
+
+func (m *mockedWalletManager) ChangePassword(
+	ctx context.Context, currentPassphrase, newPassphrase string,
+) error {
+	args := m.Called(ctx, currentPassphrase, newPassphrase)
+	return args.Error(0)
+}
+
+func (m *mockedWalletManager) Status(
+	ctx context.Context,
+) (ports.WalletStatus, error) {
+	args := m.Called(ctx)
+	var res ports.WalletStatus
+	if a := args.Get(0); a != nil {
+		res = a.(ports.WalletStatus)
+	}
+	return res, args.Error(1)
+}
+func (m *mockedWalletManager) GetInfo(
+	ctx context.Context,
+) (ports.WalletInfo, error) {
+	args := m.Called(ctx)
+	var res ports.WalletInfo
+	if a := args.Get(0); a != nil {
+		res = a.(ports.WalletInfo)
+	}
+	return res, args.Error(1)
+}
+
+type accountBalance struct {
+	total       uint64
+	confirmed   uint64
+	unconfirmed uint64
+}
+
+func (b accountBalance) Total() uint64 {
+	return b.total
+}
+func (b accountBalance) Confirmed() uint64 {
+	return b.confirmed
+}
+func (b accountBalance) Unconfirmed() uint64 {
+	return b.unconfirmed
+}
+
+type mockedAccountManager struct {
 	mock.Mock
-	counter int
-	lock    *sync.Mutex
 }
 
-func newMockedTradeManager() *mockTradeManager {
-	return &mockTradeManager{
-		lock: &sync.Mutex{},
-	}
-}
-
-func (m *mockTradeManager) FillProposal(
-	opts application.FillProposalOpts,
-) (*application.FillProposalResult, error) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	m.counter++
-	args := m.Called(opts)
-
-	var res *application.FillProposalResult
-	if a := args.Get(0); a != nil {
-		res = a.(*application.FillProposalResult)
-	}
-	return res, args.Error(1)
-}
-
-// **** TransactionManager ****
-
-type mockTransactionManager struct {
-	mock.Mock
-}
-
-func (m *mockTransactionManager) ExtractUnspents(
-	txhex string,
-	infoByScript map[string]domain.AddressInfo,
-	net *network.Network,
-) ([]domain.Unspent, []domain.UnspentKey, error) {
-	args := m.Called(txhex, infoByScript, net)
-	var res []domain.Unspent
-	if a := args.Get(0); a != nil {
-		res = a.([]domain.Unspent)
-	}
-	var res1 []domain.UnspentKey
-	if a := args.Get(1); a != nil {
-		res1 = a.([]domain.UnspentKey)
-	}
-	return res, res1, args.Error(2)
-}
-
-func (m *mockTransactionManager) ExtractBlindingData(
-	psetBase64 string,
-	inBlindingKeys, outBlindingData map[string][]byte,
-) (map[int]application.BlindingData, map[int]application.BlindingData, error) {
-	args := m.Called(psetBase64, inBlindingKeys, outBlindingData)
-	var res map[int]application.BlindingData
-	if a := args.Get(0); a != nil {
-		res = a.(map[int]application.BlindingData)
-	}
-	var res1 map[int]application.BlindingData
-	if a := args.Get(1); a != nil {
-		res1 = a.(map[int]application.BlindingData)
-	}
-	return res, res1, args.Error(2)
-}
-
-// **** Explorer ****
-
-type mockExplorer struct {
-	mock.Mock
-}
-
-func (m *mockExplorer) GetUnspents(
-	addr string,
-	blindKeys [][]byte,
-) ([]explorer.Utxo, error) {
-	args := m.Called(addr, blindKeys)
-
-	var res []explorer.Utxo
-	if a := args.Get(0); a != nil {
-		res = a.([]explorer.Utxo)
-	}
-	return res, args.Error(1)
-}
-
-func (m *mockExplorer) GetUnspentsForAddresses(
-	addresses []string,
-	blindKeys [][]byte,
-) ([]explorer.Utxo, error) {
-	args := m.Called(addresses, blindKeys)
-
-	var res []explorer.Utxo
-	if a := args.Get(0); a != nil {
-		res = a.([]explorer.Utxo)
-	}
-	return res, args.Error(1)
-}
-
-func (m *mockExplorer) GetUnspentStatus(
-	hash string, index uint32,
-) (explorer.UtxoStatus, error) {
-	args := m.Called(hash, index)
-
-	var res explorer.UtxoStatus
-	if a := args.Get(0); a != nil {
-		res = a.(explorer.UtxoStatus)
-	}
-	return res, args.Error(1)
-}
-
-func (m *mockExplorer) GetTransaction(txid string) (explorer.Transaction, error) {
-	args := m.Called(txid)
-
-	var res explorer.Transaction
-	if a := args.Get(0); a != nil {
-		res = a.(explorer.Transaction)
-	}
-	return res, args.Error(1)
-}
-
-func (m *mockExplorer) GetTransactionHex(txid string) (string, error) {
-	args := m.Called(txid)
-
-	var res string
-	if a := args.Get(0); a != nil {
-		res = a.(string)
-	}
-	return res, args.Error(1)
-}
-
-func (m *mockExplorer) IsTransactionConfirmed(txid string) (bool, error) {
-	args := m.Called(txid)
-
-	var res bool
-	if a := args.Get(0); a != nil {
-		res = a.(bool)
-	}
-	return res, args.Error(1)
-}
-
-func (m *mockExplorer) GetTransactionStatus(txid string) (explorer.TransactionStatus, error) {
-	args := m.Called(txid)
-
-	if a := args.Get(0); a != nil {
-		return a.(explorer.TransactionStatus), nil
-	}
-	return nil, args.Error(1)
-}
-
-func (m *mockExplorer) GetTransactionsForAddress(
-	addr string,
-	blindKey []byte,
-) ([]explorer.Transaction, error) {
-	args := m.Called(addr, blindKey)
-
-	var res []explorer.Transaction
-	if a := args.Get(0); a != nil {
-		res = a.([]explorer.Transaction)
-	}
-	return res, args.Error(1)
-}
-
-func (m *mockExplorer) BroadcastTransaction(txhex string) (string, error) {
-	args := m.Called(txhex)
-
-	var res string
-	if a := args.Get(0); a != nil {
-		res = a.(string)
-	}
-	return res, args.Error(1)
-}
-
-func (m *mockExplorer) PollGetKnownTransaction(
-	txid string, interval time.Duration,
-) (explorer.Transaction, error) {
-	args := m.Called(txid, interval)
-
-	var res explorer.Transaction
-	if a := args.Get(0); a != nil {
-		res = a.(explorer.Transaction)
-	}
-	return res, args.Error(1)
-}
-
-func (m *mockExplorer) Faucet(addr string, amount float64, asset string) (string, error) {
-	args := m.Called(addr, amount, asset)
-
-	var res string
-	if a := args.Get(0); a != nil {
-		res = a.(string)
-	}
-	return res, args.Error(1)
-}
-
-func (m *mockExplorer) Mint(addr string, amount float64) (string, string, error) {
-	args := m.Called(addr, amount)
-
-	var res string
-	if a := args.Get(0); a != nil {
-		res = a.(string)
-	}
+func (m *mockedAccountManager) CreateAccount(
+	ctx context.Context, name string,
+) (uint64, string, error) {
+	args := m.Called(ctx, name)
+	var res uint64
 	var res1 string
+	if a := args.Get(0); a != nil {
+		res = a.(uint64)
+	}
 	if a := args.Get(1); a != nil {
 		res1 = a.(string)
 	}
 	return res, res1, args.Error(2)
 }
 
-func (m *mockExplorer) GetBlockHeight() (int, error) {
-	args := m.Called()
-
-	var res int
+func (m *mockedAccountManager) DeriveAddressesForAccount(
+	ctx context.Context, account string, numOfAddresses uint64,
+) ([]ports.AddressInfo, error) {
+	args := m.Called(ctx, account, numOfAddresses)
+	var res []ports.AddressInfo
 	if a := args.Get(0); a != nil {
-		res = a.(int)
+		res = a.([]ports.AddressInfo)
 	}
 	return res, args.Error(1)
 }
 
-// **** Explorer's Transaction ****
-
-type mockTransaction struct {
-	address string
-}
-
-func (m *mockTransaction) Hash() string {
-	return randomHex(32)
-}
-
-func (m *mockTransaction) Version() int {
-	return 2
-}
-
-func (m *mockTransaction) Locktime() int {
-	return 0
-}
-func (m *mockTransaction) Inputs() []*transaction.TxInput {
-	inLen := randomIntInRange(1, 3)
-	ins := make([]*transaction.TxInput, inLen, inLen)
-	for i := 0; i < inLen; i++ {
-		ins[i] = transaction.NewTxInput(randomBytes(32), 0)
+func (m *mockedAccountManager) DeriveChangeAddressForAccount(
+	ctx context.Context, account string, numOfAddresses uint64,
+) ([]ports.AddressInfo, error) {
+	args := m.Called(ctx, account, numOfAddresses)
+	var res []ports.AddressInfo
+	if a := args.Get(0); a != nil {
+		res = a.([]ports.AddressInfo)
 	}
-	return ins
+	return res, args.Error(1)
 }
 
-func (m *mockTransaction) Outputs() []*transaction.TxOutput {
-	outLen := randomIntInRange(2, 5)
-	outs := make([]*transaction.TxOutput, outLen, outLen)
-	script, _ := address.ToOutputScript(m.address)
-	for i := 0; i < outLen; i++ {
-		outs[i] = &transaction.TxOutput{
-			Asset:           randomBytes(33),
-			Value:           randomBytes(33),
-			Script:          script,
-			Nonce:           randomBytes(33),
-			RangeProof:      randomBytes(100),
-			SurjectionProof: randomBytes(100),
-		}
+func (m *mockedAccountManager) ListAddressesForAccount(
+	ctx context.Context, account string,
+) ([]ports.AddressInfo, error) {
+	args := m.Called(ctx, account)
+	var res []ports.AddressInfo
+	if a := args.Get(0); a != nil {
+		res = a.([]ports.AddressInfo)
 	}
-	return outs
+	return res, args.Error(1)
 }
 
-func (m *mockTransaction) Size() int {
-	return randomIntInRange(200, 500)
+func (m *mockedAccountManager) BalanceForAccount(
+	ctx context.Context, account string,
+) (map[string]ports.Balance, error) {
+	args := m.Called(ctx, account)
+	var res map[string]ports.Balance
+	if a := args.Get(0); a != nil {
+		res = a.(map[string]ports.Balance)
+	}
+	return res, args.Error(1)
 }
 
-func (m *mockTransaction) Weight() int {
-	return randomIntInRange(500, 1000)
+func (m *mockedAccountManager) DeleteAccount(
+	ctx context.Context, account string,
+) error {
+	args := m.Called(ctx, account)
+	return args.Error(0)
 }
 
-func (m *mockTransaction) Confirmed() bool {
-	return true
+func (m *mockedAccountManager) ListUtxosForAccount(
+	ctx context.Context, account string,
+) ([]ports.Utxo, []ports.Utxo, error) {
+	args := m.Called(ctx, account)
+	var res, res1 []ports.Utxo
+	if a := args.Get(0); a != nil {
+		res = a.([]ports.Utxo)
+	}
+	if a := args.Get(1); a != nil {
+		res1 = a.([]ports.Utxo)
+
+	}
+	return res, res1, args.Error(2)
 }
 
-// **** MnemonicStore *****
-
-type simpleMnemonicStore struct {
-	mnemonic []string
-	lock     *sync.RWMutex
+type mockedTransactionManager struct {
+	mock.Mock
 }
 
-func newSimpleMnemonicStore(m []string) domain.MnemonicStore {
-	return &simpleMnemonicStore{
-		mnemonic: m,
-		lock:     &sync.RWMutex{},
+func (m *mockedTransactionManager) SelectUnspentsForAccount(
+	ctx context.Context, account string,
+	targetAsset string, targetAmount uint64, strategy ports.Strategy,
+) ([]ports.UtxoKey, uint64, error) {
+	args := m.Called(ctx, account, targetAsset, targetAmount, strategy)
+	var res []ports.UtxoKey
+	var res1 uint64
+	if a := args.Get(0); a != nil {
+		res = a.([]ports.UtxoKey)
+	}
+	if a := args.Get(1); a != nil {
+		res1 = a.(uint64)
+
+	}
+	return res, res1, args.Error(2)
+}
+
+func (m *mockedTransactionManager) EstimateFees(
+	ctx context.Context, inputs []ports.Input, outputs []ports.Output,
+) (uint64, error) {
+	args := m.Called(ctx, inputs, outputs)
+	var res uint64
+	if a := args.Get(0); a != nil {
+		res = a.(uint64)
+	}
+	return res, args.Error(1)
+}
+
+func (m *mockedTransactionManager) TransferFromAccount(
+	ctx context.Context, account string, outputs []ports.Output,
+	millisatPerByte uint64,
+) (string, error) {
+	args := m.Called(ctx, account, outputs, millisatPerByte)
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
+func (m *mockedTransactionManager) CreateTransaction(
+	ctx context.Context, inputs []ports.Input, outputs []ports.Output,
+) (string, error) {
+	args := m.Called(ctx, inputs, outputs)
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
+func (m *mockedTransactionManager) UpdateTransaction(
+	ctx context.Context, psetBase64 string, inputs []ports.Input, outputs []ports.Output,
+) (string, map[string][]byte, map[string][]byte, error) {
+	args := m.Called(ctx, psetBase64, inputs, outputs)
+	var res string
+	var res1, res2 map[string][]byte
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	if a := args.Get(1); a != nil {
+		res1 = a.(map[string][]byte)
+	}
+	if a := args.Get(2); a != nil {
+		res2 = a.(map[string][]byte)
+	}
+	return res, res1, res2, args.Error(3)
+}
+
+func (m *mockedTransactionManager) BlindTransaction(
+	ctx context.Context, psetBase64 string, lastBlinder bool,
+) (string, error) {
+	args := m.Called(ctx, psetBase64, lastBlinder)
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
+func (m *mockedTransactionManager) SignTransaction(
+	ctx context.Context, psetBase64 string, extractRawTx bool,
+) (string, error) {
+	args := m.Called(ctx, psetBase64, extractRawTx)
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
+func (m *mockedTransactionManager) BroadcastTransaction(
+	ctx context.Context, txHex string,
+) (string, error) {
+	args := m.Called(ctx, txHex)
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res, args.Error(1)
+}
+
+type mockedNotificationManager struct {
+	mock.Mock
+}
+
+func (m *mockedNotificationManager) TxChannel() chan ports.TxNotification {
+	args := m.Called()
+	var res chan ports.TxNotification
+	if a := args.Get(0); a != nil {
+		res = a.(chan ports.TxNotification)
+	}
+	return res
+}
+
+func (m *mockedNotificationManager) UtxoChannel() chan ports.UtxoNotification {
+	args := m.Called()
+	var res chan ports.UtxoNotification
+	if a := args.Get(0); a != nil {
+		res = a.(chan ports.UtxoNotification)
+	}
+	return res
+}
+
+// **** Wallet ****
+type mockedWallet struct {
+	mock.Mock
+	walletManager       *mockedWalletManager
+	accountManager      *mockedAccountManager
+	txManager           *mockedTransactionManager
+	notificationManager *mockedNotificationManager
+}
+
+func newMockedWallet() application.Wallet {
+	walletManager := &mockedWalletManager{}
+	accountManager := &mockedAccountManager{}
+	txManager := &mockedTransactionManager{}
+	notificationManager := &mockedNotificationManager{}
+	return &mockedWallet{
+		walletManager:       walletManager,
+		accountManager:      accountManager,
+		txManager:           txManager,
+		notificationManager: notificationManager,
 	}
 }
 
-func (s *simpleMnemonicStore) Set(mnemonic string) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.mnemonic = strings.Split(mnemonic, " ")
+func (m *mockedWallet) WalletManager() ports.WalletManager {
+	return m.walletManager
+}
+func (m *mockedWallet) AccountManager() ports.AccountManager {
+	return m.accountManager
+}
+func (m *mockedWallet) TransactionManager() ports.TransactionManager {
+	return m.txManager
+}
+func (m *mockedWallet) NotificationManager() ports.NotificationManager {
+	return m.notificationManager
 }
 
-func (s *simpleMnemonicStore) Unset() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.mnemonic = nil
+func (m *mockedWallet) Network() string {
+	args := m.Called()
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res
 }
 
-func (s *simpleMnemonicStore) IsSet() bool {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	return len(s.mnemonic) > 0
+func (m *mockedWallet) NativeAsset() string {
+	args := m.Called()
+	var res string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	return res
 }
 
-func (s *simpleMnemonicStore) Get() []string {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	return s.mnemonic
+func (m *mockedWallet) DeriveAddressForAccount(
+	ctx context.Context, account string, numOfAddresses uint64,
+) ([]application.AddressAndBlindingKey, error) {
+	args := m.Called(ctx, account, numOfAddresses)
+	var res []application.AddressAndBlindingKey
+	if a := args.Get(0); a != nil {
+		res = a.([]application.AddressAndBlindingKey)
+	}
+	return res, args.Error(1)
 }
 
-// **** Encrypter ****
-
-type mockCryptoHandler struct {
-	encrypt func(mnemonic, passphrase string) (string, error)
-	decrypt func(encryptedMnemonic, passphrase string) (string, error)
+func (m *mockedWallet) ListAddressesForAccount(
+	ctx context.Context, account string,
+) ([]application.AddressAndBlindingKey, error) {
+	args := m.Called(ctx, account)
+	var res []application.AddressAndBlindingKey
+	if a := args.Get(0); a != nil {
+		res = a.([]application.AddressAndBlindingKey)
+	}
+	return res, args.Error(1)
 }
 
-func (c mockCryptoHandler) Encrypt(mnemonic, passpharse string) (string, error) {
-	return c.encrypt(mnemonic, passpharse)
+func (m *mockedWallet) BalanceForAccount(
+	ctx context.Context, account string,
+) (map[string]ports.Balance, error) {
+	args := m.Called(ctx, account)
+	var res map[string]ports.Balance
+	if a := args.Get(0); a != nil {
+		res = a.(map[string]ports.Balance)
+	}
+	return res, args.Error(1)
 }
 
-func (c mockCryptoHandler) Decrypt(encryptedMnemonic, passpharse string) (string, error) {
-	return c.decrypt(encryptedMnemonic, passpharse)
+func (m *mockedWallet) SendToManyWithFeeTopup(
+	ctx context.Context,
+	account string, outs application.Outputs, millisatPerByte uint64,
+) (string, string, error) {
+	args := m.Called(ctx, account, outs, millisatPerByte)
+	var res, res1 string
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	if a := args.Get(1); a != nil {
+		res1 = a.(string)
+	}
+	return res, res1, args.Error(2)
 }
+
+func (m *mockedWallet) FillSwapTransaction(
+	ctx context.Context, account string, swapRequest domain.SwapRequest,
+) (string, []ports.UtxoKey, map[string][]byte, map[string][]byte, error) {
+	args := m.Called(ctx, account, swapRequest)
+	var res string
+	var res1 []ports.UtxoKey
+	var res2, res3 map[string][]byte
+	if a := args.Get(0); a != nil {
+		res = a.(string)
+	}
+	if a := args.Get(1); a != nil {
+		res1 = a.([]ports.UtxoKey)
+	}
+	if a := args.Get(2); a != nil {
+		res2 = a.(map[string][]byte)
+	}
+	if a := args.Get(3); a != nil {
+		res3 = a.(map[string][]byte)
+	}
+	return res, res1, res2, res3, args.Error(4)
+}
+
+func (m *mockedWallet) RegisterHandlerForUtxoEvent(_ application.UtxoNotificationHandler) {}
+func (m *mockedWallet) RegisterHandlerForTxEvent(_ application.TxNotificationHandler)     {}
 
 // **** PsetParser ****
 
@@ -507,23 +606,6 @@ func (m *mockSwapParser) DeserializeFail(msg []byte) (domain.SwapFail, error) {
 		res = a.(domain.SwapFail)
 	}
 	return res, args.Error(1)
-}
-
-// trandaction status
-
-type mockTxStatus map[string]interface{}
-
-func (m mockTxStatus) Confirmed() bool {
-	return m["confirmed"].(bool)
-}
-func (m mockTxStatus) BlockHash() string {
-	return m["block_hash"].(string)
-}
-func (m mockTxStatus) BlockTime() int {
-	return int(m["block_time"].(float64))
-}
-func (m mockTxStatus) BlockHeight() int {
-	return int(m["block_height"].(float64))
 }
 
 // **** SwapRequest ****
