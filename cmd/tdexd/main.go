@@ -20,8 +20,6 @@ import (
 	dbbadger "github.com/tdex-network/tdex-daemon/internal/infrastructure/storage/db/badger"
 	"github.com/tdex-network/tdex-daemon/internal/interfaces"
 	grpcinterface "github.com/tdex-network/tdex-daemon/internal/interfaces/grpc"
-	"github.com/tdex-network/tdex-daemon/pkg/circuitbreaker"
-	"github.com/tdex-network/tdex-daemon/pkg/crawler"
 	"github.com/tdex-network/tdex-daemon/pkg/explorer/esplora"
 	boltsecurestore "github.com/tdex-network/tdex-daemon/pkg/securestore/bolt"
 	"github.com/tdex-network/tdex-daemon/pkg/stats"
@@ -52,12 +50,7 @@ var (
 	feeThreshold                  = uint64(config.GetInt(config.FeeAccountBalanceThresholdKey))
 	tradeSvcPort                  = config.GetInt(config.TradeListeningPortKey)
 	operatorSvcPort               = config.GetInt(config.OperatorListeningPortKey)
-	crawlerIntervalInMilliseconds = time.Duration(config.GetInt(config.CrawlIntervalKey)) * time.Millisecond
-	explorerTimoutRequest         = config.GetDuration(config.ExplorerRequestTimeoutKey)
-	cbMaxFailingRequest           = config.GetInt(config.CBMaxFailingRequestsKey)
-	cbFailingRatio                = config.GetFloat(config.CBFailingRatioKey)
-	rescanRangeStart              = config.GetInt(config.RescanRangeStartKey)
-	rescanGapLimit                = config.GetInt(config.RescanGapLimitKey)
+	httpClientReqTimeout          = config.GetDuration(config.ExplorerRequestTimeoutKey)
 )
 
 func main() {
@@ -71,9 +64,18 @@ func main() {
 		}()
 	}
 
-	// Set default params for circuitbreaker pkg
-	circuitbreaker.MaxNumOfFailingRequests = cbMaxFailingRequest
-	circuitbreaker.FailingRatio = cbFailingRatio
+	webhookPubSub, err := newWebhookPubSubService(dbDir, httpClientReqTimeout)
+	if err != nil {
+		log.Errorf("error while setting up webhook pubsub service: %s", err)
+		return
+	}
+
+	// TODO: setup a portable wallet
+	wallet, err := application.NewWallet(nil)
+	if err != nil {
+		log.Errorf("error while setting up internal wallet: %s", err)
+		return
+	}
 
 	// Init services to be used by those of the application layer.
 	repoManager, err := dbbadger.NewRepoManager(dbDir, log.New())
@@ -81,82 +83,32 @@ func main() {
 		log.Errorf("error while opening db: %s", err)
 		return
 	}
-
-	explorerSvc, err := config.GetExplorer()
-	if err != nil {
-		repoManager.Close()
-
-		log.Errorf("error while setting up explorer service: %s", err)
-		return
-	}
-	crawlerSvc := crawler.NewService(crawler.Opts{
-		ExplorerSvc:     explorerSvc,
-		ErrorHandler:    func(err error) { log.Warn(err) },
-		CrawlerInterval: crawlerIntervalInMilliseconds,
-	})
-	webhookPubSub, err := newWebhookPubSubService(dbDir, explorerTimoutRequest)
-	if err != nil {
-		crawlerSvc.Stop()
-		repoManager.Close()
-
-		log.Errorf("error while setting up webhook pubsub service: %s", err)
-		return
-	}
-
-	network, err := config.GetNetwork()
-	if err != nil {
-		crawlerSvc.Stop()
-		repoManager.Close()
-
-		log.Errorf("error while setting up network: %s", err)
-		return
-	}
-
-	blockchainListener := application.NewBlockchainListener(
-		crawlerSvc,
-		repoManager,
-		webhookPubSub,
-		network,
-	)
+	// TODO: integrate webhooks and repo events
 
 	// Init application services
 	tradeSvc := application.NewTradeService(
 		repoManager,
-		explorerSvc,
-		blockchainListener,
+		wallet,
+		webhookPubSub,
 		tradesExpiryDurationInSeconds,
 		tradesSatsPerByte,
 		pricesSlippagePercentage,
-		network,
 		feeThreshold,
 	)
 	operatorSvc := application.NewOperatorService(
 		repoManager,
-		explorerSvc,
-		blockchainListener,
+		wallet,
+		webhookPubSub,
 		marketsBaseAsset,
 		marketsQuoteAsset,
 		marketsFee,
-		network,
 		feeThreshold,
 	)
 	walletSvc := application.NewWalletService(
-		repoManager,
-		explorerSvc,
-		blockchainListener,
-		network,
-		marketsFee,
+		repoManager, wallet, marketsFee,
 	)
 	walletUnlockerSvc := application.NewWalletUnlockerService(
-		repoManager,
-		explorerSvc,
-		blockchainListener,
-		network,
-		marketsFee,
-		marketsBaseAsset,
-		marketsQuoteAsset,
-		rescanRangeStart,
-		rescanGapLimit,
+		nil, webhookPubSub,
 	)
 
 	// Init gRPC interfaces.
@@ -179,7 +131,6 @@ func main() {
 	}
 	svc, err := grpcinterface.NewService(opts)
 	if err != nil {
-		crawlerSvc.Stop()
 		repoManager.Close()
 
 		log.Errorf("error while setting up gRPC service: %s", err)
@@ -195,7 +146,7 @@ func main() {
 		stats.EnableMemoryStatistics(ctx, statsIntervalInSeconds, profilerDir)
 	}
 
-	defer stop(repoManager, webhookPubSub, blockchainListener, svc, cancelStats)
+	defer stop(repoManager, webhookPubSub, svc, cancelStats)
 
 	// Start gRPC service interfaces.
 	if err := svc.Start(); err != nil {
@@ -213,7 +164,6 @@ func main() {
 func stop(
 	repoManager ports.RepoManager,
 	pubsubSvc ports.SecurePubSub,
-	blockchainListener application.BlockchainListener,
 	svc interfaces.Service,
 	cancelStats context.CancelFunc,
 ) {
@@ -225,13 +175,8 @@ func stop(
 
 	svc.Stop()
 
-	blockchainListener.StopObservation()
-
 	pubsubSvc.Store().Close()
 	log.Debug("stopped pubsub service")
-
-	// give the crawler the time to terminate
-	time.Sleep(crawlerIntervalInMilliseconds)
 
 	repoManager.Close()
 	log.Debug("closed connection with database")
