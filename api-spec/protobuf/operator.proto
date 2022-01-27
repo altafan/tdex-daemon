@@ -22,10 +22,6 @@ service Operator {
   // Returns info about the balance of LBTC held in the fee account.
   rpc GetFeeBalance(GetFeeBalanceRequest) returns (GetFeeBalanceReply) {}
 
-  // Allows to provide transaction(s) outpoints of deposits made to fund the fee account.
-  // The transaction(s) must be already included in blockchain.
-  rpc ClaimFeeDeposits(ClaimFeeDepositsRequest) returns (ClaimFeeDepositsReply) {}
-
   // Allows to withdraw funds from the fee account to a given address.
   rpc WithdrawFee(WithdrawFeeRequest) returns (WithdrawFeeReply) {}
 
@@ -44,10 +40,6 @@ service Operator {
 
   // Returns info about the balance of the given market.
   rpc GetMarketBalance(GetMarketBalanceRequest) returns (GetMarketBalanceReply) {}
-
-  // Allows to provide transaction(s) outpoints of deposits made to fund a market.
-  // The transaction(s) provided must be already included in blockchain.
-  rpc ClaimMarketDeposits(ClaimMarketDepositsRequest) returns (ClaimMarketDepositsReply) {}
 
   // Makes the given market tradable.
   rpc OpenMarket(OpenMarketRequest) returns (OpenMarketReply) {}
@@ -131,11 +123,14 @@ service Operator {
   // failed/rejected) or all those filtered by market.
   rpc ListTrades(ListTradesRequest) returns (ListTradesReply) {}
 
-  // Causes the daemon to re-sync the whole utxo set.
-  rpc ReloadUtxos(ReloadUtxosRequest) returns(ReloadUtxosReply) {}
-
   // Returns all the utxos, whether unspents, spents or locked.
   rpc ListUtxos(ListUtxosRequest) returns(ListUtxosReply){}
+
+  // Returns the list of all claimed deposits for the given account.
+  rpc ListDeposits(ListDepositsRequest) returns(ListDepositsReply){}
+
+  // Returns the list of all withdrawals made for the given account.
+  rpc ListWithdrawals(ListWithdrawalsRequest) returns(ListWithdrawalsReply){}
 
   // Adds a webhook registered for some kind of event.
   rpc AddWebhook(AddWebhookRequest) returns(AddWebhookReply){}
@@ -145,12 +140,6 @@ service Operator {
 
   // Returns registered webhooks
   rpc ListWebhooks(ListWebhooksRequest) returns(ListWebhooksReply){}
-
-  // Returns the list of all claimed deposits for the given account.
-  rpc ListDeposits(ListDepositsRequest) returns(ListDepositsReply){}
-
-  // Returns the list of all withdrawals made for the given account.
-  rpc ListWithdrawals(ListWithdrawalsRequest) returns(ListWithdrawalsReply){}
 }
 
 message GetInfoRequest{}
@@ -186,13 +175,6 @@ message GetFeeBalanceReply {
   // The balance of all unspents included those locked.
   uint64 total_balance = 2;
 }
-
-message ClaimFeeDepositsRequest {
-  // The list of outpoints sent to the fee account address(es).
-  // They all must be confirmed, ie. included in blockchain.
-  repeated TxOutpoint outpoints = 1;
-}
-message ClaimFeeDepositsReply {}
 
 message WithdrawFeeRequest {
   // The amount of L-BTC to widthdraw expressed in Satoshi.
@@ -255,15 +237,6 @@ message GetMarketBalanceReply {
   // The balance of all unspents included those locked.
   Balance total_balance = 2;
 }
-
-message ClaimMarketDepositsRequest {
-  // The market for which claiming the deposits.
-  Market market = 1;
-  // The list of outpoints sent to the market address(es).
-  // They all must be confirmed, ie. included in blockchain.
-  repeated TxOutpoint outpoints = 2;
-}
-message ClaimMarketDepositsReply {}
 
 message OpenMarketRequest {
   // The market to be made tradable.
@@ -439,12 +412,9 @@ message ListTradesReply {
   repeated TradeInfo trades = 1;
 }
 
-message ReloadUtxosRequest {}
-message ReloadUtxosReply {}
-
 message ListUtxosRequest {
-  // Optional: request all utxos owned by a specific wallet account.
-  uint64 account_index = 1;
+  // The name of the account for which listing utxos
+  string account_name = 1;
   // The page for a paginated reply.
   Page page = 2;
 }
@@ -487,27 +457,27 @@ message ListWebhooksReply {
 }
 
 message ListDepositsRequest{
-  // The index of the wallet account for which listing the deposits.
-  int64 account_index = 1;
+  // The name of the wallet account for which listing the deposits.
+  string account_name = 1;
   // The page for a paginated reply.
   Page page = 2;
 }
 message ListDepositsReply{
   // The index of the wallet account.
-  int64 account_index = 1;
+  string account_name = 1;
   // The list of info about the deposits.
   repeated Deposit deposits = 2;
 }
 
 message ListWithdrawalsRequest{
   // The index of the wallet account for which listing the withdrawals.
-  int64 account_index = 1;
+  string account_name = 1;
   // The page for a paginated reply.
   Page page = 2;
 }
 message ListWithdrawalsReply{
   // The index of the wallet account.
-  int64 account_index = 1;
+  string account_name = 1;
   // The list of info about the withdrawals.
   repeated Withdrawal withdrawals = 2;
 }
@@ -540,15 +510,17 @@ enum ActionType {
 
 message AccountInfo {
   // The index of the wallet account.
-  uint32 account_index = 1;
+  uint64 account_index = 1;
+  // The name of the wallet account.
+  string account_name = 2;
   // The full derivation path.
-  string derivation_path = 2;
+  string derivation_path = 3;
   // The master public key.
-  string xpub = 3;
+  string xpub = 4;
   // The index of the last external address derived.
-  uint32 last_external_derived = 4;
+  uint32 last_external_derived = 5;
   // The index of the last internal address derived.
-  uint32 last_internal_derived = 5;
+  uint32 last_internal_derived = 6;
 }
 
 message MarketInfo {
@@ -560,12 +532,14 @@ message MarketInfo {
   bool tradable = 3;
   // The making strategy. 
   StrategyType strategy_type = 4;
-  // The index of the wallet account.
+  // The index of the market account.
   uint64 account_index = 5;
+  // The name of the market account.
+  string account_name = 6;
   // The current price in case the strategy is PLUGGABLE.
-  Price price = 6;
+  Price price = 7;
   // The current unlocked balance.
-  Balance balance = 7;
+  Balance balance = 8;
 }
 
 message UtxoInfo {
@@ -686,11 +660,11 @@ message Deposit {
 
 message Withdrawal {
   // The hash of the transaction included in mempool/blockchain.
-  string tx_id = 1;
-  // The balance withdrawn from the wallet account.
-  Balance balance = 2;
+  string txid = 1;
+  // The amount per asset withdrawn from the wallet account.
+  map<string, uint64> amount_per_asset = 2;
   // The address where the funds have been sent.
-  string address = 3;
+  repeated string addresses = 3;
   // The timestamp of the withdrawal transaction in Unix format.
   uint64 timestamp_unix = 4;
   // The timestamp of the withdrawal transaction in UTC format.

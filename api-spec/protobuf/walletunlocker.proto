@@ -78,13 +78,7 @@ message InitWalletRequest {
   bool restore = 3;
 }
 message InitWalletReply {
-  int32 account = 1;
-  enum Status {
-    PROCESSING = 0;
-    DONE = 1;
-  } 
-  Status status = 2;
-  string data = 3;
+  string message = 1;
 }
 
 message UnlockWalletRequest {
