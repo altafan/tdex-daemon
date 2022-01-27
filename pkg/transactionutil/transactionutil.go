@@ -2,6 +2,7 @@ package transactionutil
 
 import (
 	"encoding/hex"
+	"fmt"
 
 	"github.com/vulpemventures/go-elements/network"
 	"github.com/vulpemventures/go-elements/pset"
@@ -68,4 +69,36 @@ func GetTxIdFromHex(txHex string) (string, error) {
 		return "", err
 	}
 	return tx.TxHash().String(), nil
+}
+
+// FinalizeAndExtractTransaction attempts to finalize the provided partial
+// transaction and eventually extracts the final transaction and returns
+// it in hex string format, along with its transaction id
+func FinalizeAndExtractTransaction(psetBase64 string) (string, string, error) {
+	ptx, err := pset.NewPsetFromBase64(psetBase64)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid pset: %s", err)
+	}
+
+	ok, err := ptx.ValidateAllSignatures()
+	if err != nil {
+		return "", "", err
+	}
+	if !ok {
+		return "", "", fmt.Errorf("invalid pset: failed to verify all signatures")
+	}
+
+	if err := pset.FinalizeAll(ptx); err != nil {
+		return "", "", err
+	}
+
+	tx, err := pset.Extract(ptx)
+	if err != nil {
+		return "", "", err
+	}
+	txHex, err := tx.ToHex()
+	if err != nil {
+		return "", "", err
+	}
+	return txHex, tx.TxHash().String(), nil
 }
