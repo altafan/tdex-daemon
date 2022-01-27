@@ -17,11 +17,13 @@ const (
 var tradeTablePrefixKey = []byte(TradeBadgerholdKeyPrefix)
 
 type tradeRepositoryImpl struct {
-	store *badgerhold.Store
+	store        *badgerhold.Store
+	eventChannel chan domain.TradeEvent
 }
 
 func NewTradeRepositoryImpl(store *badgerhold.Store) domain.TradeRepository {
-	return tradeRepositoryImpl{store}
+	eventChannel := make(chan domain.TradeEvent)
+	return tradeRepositoryImpl{store, eventChannel}
 }
 
 func (t tradeRepositoryImpl) GetOrCreateTrade(
@@ -149,9 +151,37 @@ func (t tradeRepositoryImpl) UpdateTrade(
 			if txIsNotGiven && isTransactionConflict(err) {
 				continue
 			}
+			return err
 		}
-		return err
+		break
 	}
+
+	var eventType domain.TradeEventType
+	if updatedTrade.IsProposal() {
+		eventType = domain.TradeProposedEvent
+	}
+	if updatedTrade.IsAccepted() {
+		eventType = domain.TradeAcceptedEvent
+	}
+	if updatedTrade.IsCompleted() {
+		eventType = domain.TradeCompletedEvent
+	}
+	if updatedTrade.IsSettled() {
+		eventType = domain.TradeSettledEvent
+	}
+	if updatedTrade.IsExpired() {
+		eventType = domain.TradeExpiredEvent
+	}
+	t.eventChannel <- domain.TradeEvent{
+		EventType: eventType,
+		Trade:     *updatedTrade,
+	}
+
+	return nil
+}
+
+func (t tradeRepositoryImpl) EventChannel() chan domain.TradeEvent {
+	return t.eventChannel
 }
 
 func (t tradeRepositoryImpl) getOrCreateTrade(

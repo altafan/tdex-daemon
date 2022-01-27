@@ -4,55 +4,60 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"sort"
 
 	"github.com/tdex-network/tdex-daemon/internal/core/domain"
 )
 
-// MarketRepositoryImpl represents an in memory storage
-type MarketRepositoryImpl struct {
+// marketRepositoryImpl represents an in memory storage
+type marketRepositoryImpl struct {
 	store *marketInmemoryStore
 }
 
-// NewMarketRepositoryImpl returns a new empty MarketRepositoryImpl
-func NewMarketRepositoryImpl(store *marketInmemoryStore) domain.MarketRepository {
-	return &MarketRepositoryImpl{store}
+func NewMarketRepositoryImpl(
+	store *marketInmemoryStore,
+) domain.MarketRepository {
+	return &marketRepositoryImpl{store}
 }
 
-// GetOrCreateMarket gets a market with a given account index. If not found, a new entry is inserted
-func (r MarketRepositoryImpl) GetOrCreateMarket(_ context.Context, market *domain.Market) (*domain.Market, error) {
+func (r marketRepositoryImpl) GetOrCreateMarket(
+	_ context.Context, market *domain.Market,
+) (*domain.Market, error) {
 	r.store.locker.Lock()
 	defer r.store.locker.Unlock()
 
 	return r.getOrCreateMarket(market)
 }
 
-// GetMarketByAccount return the market for the account index given as parameter
-func (r MarketRepositoryImpl) GetMarketByAccount(_ context.Context, accountIndex int) (*domain.Market, error) {
+func (r marketRepositoryImpl) GetMarketByAccount(
+	_ context.Context, accountIndex uint64,
+) (*domain.Market, error) {
 	r.store.locker.Lock()
 	defer r.store.locker.Unlock()
 
 	return r.getMarketByAccount(accountIndex)
 }
 
-// GetMarketByAsset returns a funded market using the quote asset hash
-func (r MarketRepositoryImpl) GetMarketByAssets(_ context.Context, baseAsset, quoteAsset string) (market *domain.Market, accountIndex int, err error) {
+func (r marketRepositoryImpl) GetMarketByName(
+	_ context.Context, accountName string,
+) (*domain.Market, int, error) {
+	r.store.locker.Lock()
+	defer r.store.locker.Unlock()
+
+	return r.getMarketByName(accountName)
+}
+
+func (r marketRepositoryImpl) GetMarketByAssets(
+	_ context.Context, baseAsset, quoteAsset string,
+) (market *domain.Market, accountIndex int, err error) {
 	r.store.locker.Lock()
 	defer r.store.locker.Unlock()
 
 	return r.getMarketByAssets(baseAsset, quoteAsset)
 }
 
-// GetLatestMarket returns the latest stored market (either funded or not)
-func (r MarketRepositoryImpl) GetLatestMarket(_ context.Context) (market *domain.Market, accountIndex int, err error) {
-	r.store.locker.Lock()
-	defer r.store.locker.Unlock()
-
-	return r.getLatestMarket()
-}
-
-// GetTradableMarkets returns all the markets available for trading
-func (r MarketRepositoryImpl) GetTradableMarkets(_ context.Context) (tradableMarkets []domain.Market, err error) {
+func (r marketRepositoryImpl) GetTradableMarkets(
+	_ context.Context,
+) (tradableMarkets []domain.Market, err error) {
 	r.store.locker.Lock()
 	defer r.store.locker.Unlock()
 
@@ -65,8 +70,9 @@ func (r MarketRepositoryImpl) GetTradableMarkets(_ context.Context) (tradableMar
 	return tradableMarkets, nil
 }
 
-// GetAllMarkets returns all the markets either tradable or not.
-func (r MarketRepositoryImpl) GetAllMarkets(_ context.Context) ([]domain.Market, error) {
+func (r marketRepositoryImpl) GetAllMarkets(
+	_ context.Context,
+) ([]domain.Market, error) {
 	r.store.locker.Lock()
 	defer r.store.locker.Unlock()
 
@@ -79,10 +85,8 @@ func (r MarketRepositoryImpl) GetAllMarkets(_ context.Context) ([]domain.Market,
 	return markets, nil
 }
 
-// UpdateMarket updates data to a market identified by the account index passing an update function
-func (r MarketRepositoryImpl) UpdateMarket(
-	_ context.Context,
-	accountIndex int,
+func (r marketRepositoryImpl) UpdateMarket(
+	_ context.Context, accountIndex uint64,
 	updateFn func(m *domain.Market) (*domain.Market, error),
 ) error {
 	r.store.locker.Lock()
@@ -108,8 +112,9 @@ func (r MarketRepositoryImpl) UpdateMarket(
 	return nil
 }
 
-// OpenMarket makes a market found with the given quote asset hash as available for trading
-func (r MarketRepositoryImpl) OpenMarket(_ context.Context, accountIndex int) error {
+func (r marketRepositoryImpl) OpenMarket(
+	_ context.Context, accountIndex uint64,
+) error {
 	r.store.locker.Lock()
 	defer r.store.locker.Unlock()
 
@@ -136,8 +141,9 @@ func (r MarketRepositoryImpl) OpenMarket(_ context.Context, accountIndex int) er
 	return nil
 }
 
-// CloseMarket makes a market found with the given quote asset hash as NOT available for trading
-func (r MarketRepositoryImpl) CloseMarket(_ context.Context, accountIndex int) error {
+func (r marketRepositoryImpl) CloseMarket(
+	_ context.Context, accountIndex uint64,
+) error {
 	r.store.locker.Lock()
 	defer r.store.locker.Unlock()
 
@@ -161,7 +167,9 @@ func (r MarketRepositoryImpl) CloseMarket(_ context.Context, accountIndex int) e
 	return nil
 }
 
-func (r *MarketRepositoryImpl) UpdatePrices(_ context.Context, accountIndex int, prices domain.Prices) error {
+func (r *marketRepositoryImpl) UpdatePrices(
+	_ context.Context, accountIndex uint64, prices domain.Prices,
+) error {
 	r.store.locker.Lock()
 	defer r.store.locker.Unlock()
 
@@ -183,16 +191,17 @@ func (r *MarketRepositoryImpl) UpdatePrices(_ context.Context, accountIndex int,
 	return nil
 }
 
-func (r *MarketRepositoryImpl) DeleteMarket(
-	_ context.Context,
-	accountIndex int,
+func (r *marketRepositoryImpl) DeleteMarket(
+	_ context.Context, accountIndex uint64,
 ) error {
 	delete(r.store.markets, accountIndex)
 
 	return nil
 }
 
-func (r MarketRepositoryImpl) getOrCreateMarket(market *domain.Market) (*domain.Market, error) {
+func (r marketRepositoryImpl) getOrCreateMarket(
+	market *domain.Market,
+) (*domain.Market, error) {
 	if market == nil {
 		return nil, ErrMarketInvalidRequest
 	}
@@ -208,12 +217,15 @@ func (r MarketRepositoryImpl) getOrCreateMarket(market *domain.Market) (*domain.
 		key := keyFromAssets(market.BaseAsset, market.QuoteAsset)
 		r.store.markets[market.AccountIndex] = *market
 		r.store.accountsByAssetsKey[key] = market.AccountIndex
+		r.store.accountsByName[market.Name] = market.AccountIndex
 		mkt = market
 	}
 	return mkt, nil
 }
 
-func (r MarketRepositoryImpl) getMarketByAccount(accountIndex int) (*domain.Market, error) {
+func (r marketRepositoryImpl) getMarketByAccount(
+	accountIndex uint64,
+) (*domain.Market, error) {
 	market, ok := r.store.markets[accountIndex]
 	if !ok {
 		return nil, nil
@@ -222,7 +234,22 @@ func (r MarketRepositoryImpl) getMarketByAccount(accountIndex int) (*domain.Mark
 	return &market, nil
 }
 
-func (r MarketRepositoryImpl) getMarketByAssets(baseAsset, quoteAsset string) (*domain.Market, int, error) {
+func (r marketRepositoryImpl) getMarketByName(
+	accountName string,
+) (*domain.Market, int, error) {
+	accountIndex, ok := r.store.accountsByName[accountName]
+	if !ok {
+		return nil, -1, nil
+	}
+	currentMarket, ok := r.store.markets[accountIndex]
+	if !ok {
+		return nil, -1, nil
+	}
+	return &currentMarket, int(accountIndex), nil
+}
+func (r marketRepositoryImpl) getMarketByAssets(
+	baseAsset, quoteAsset string,
+) (*domain.Market, int, error) {
 	key := keyFromAssets(baseAsset, quoteAsset)
 	selectedAccountIndex, assetExist := r.store.accountsByAssetsKey[key]
 	if !assetExist {
@@ -232,36 +259,7 @@ func (r MarketRepositoryImpl) getMarketByAssets(baseAsset, quoteAsset string) (*
 	if !ok {
 		return nil, -1, nil
 	}
-	return &currentMarket, selectedAccountIndex, nil
-}
-
-func (r MarketRepositoryImpl) getLatestMarket() (*domain.Market, int, error) {
-	// In case we never created any markets yet, first account index usable should be the 5th,
-	// becuase accounts 0-4 are reserved for other internal daemon purposes.
-	// We returns 4th account index as the latest, so other code will increment and does not need to know of this reserved thing.
-	//
-	// TODO move in separated constant type mapping
-	numberOfMarkets := len(r.store.markets)
-
-	if numberOfMarkets == 0 {
-		return nil, 4, nil
-	}
-
-	accountIndexes := make([]int, 0, numberOfMarkets)
-	for k := range r.store.markets {
-		accountIndexes = append(accountIndexes, k)
-	}
-
-	sort.Ints(accountIndexes)
-
-	latestAccountIndex := accountIndexes[len(accountIndexes)-1]
-
-	currentMarket, ok := r.store.markets[latestAccountIndex]
-	if !ok {
-		return nil, -1, ErrMarketNotExist
-	}
-
-	return &currentMarket, latestAccountIndex, nil
+	return &currentMarket, int(selectedAccountIndex), nil
 }
 
 func keyFromAssets(baseAsset, quoteAsset string) string {

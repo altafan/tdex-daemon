@@ -16,8 +16,7 @@ func NewDepositRepositoryImpl(store *depositInmemoryStore) domain.DepositReposit
 }
 
 func (d DepositRepositoryImpl) AddDeposits(
-	ctx context.Context,
-	deposits []domain.Deposit,
+	ctx context.Context, deposits []domain.Deposit,
 ) (int, error) {
 	d.store.locker.Lock()
 	defer d.store.locker.Unlock()
@@ -34,15 +33,14 @@ func (d DepositRepositoryImpl) AddDeposits(
 }
 
 func (d DepositRepositoryImpl) ListDepositsForAccount(
-	ctx context.Context,
-	accountIndex int,
+	ctx context.Context, accountName string,
 ) ([]domain.Deposit, error) {
 	d.store.locker.RLock()
 	defer d.store.locker.RUnlock()
 
 	result := make([]domain.Deposit, 0)
 	for _, v := range d.store.deposits {
-		if v.AccountIndex == accountIndex {
+		if v.AccountName == accountName {
 			result = append(result, v)
 		}
 	}
@@ -50,9 +48,7 @@ func (d DepositRepositoryImpl) ListDepositsForAccount(
 }
 
 func (d DepositRepositoryImpl) ListDepositsForAccountAndPage(
-	ctx context.Context,
-	accountIndex int,
-	page domain.Page,
+	ctx context.Context, accountName string, page domain.Page,
 ) ([]domain.Deposit, error) {
 	d.store.locker.RLock()
 	defer d.store.locker.RUnlock()
@@ -62,7 +58,7 @@ func (d DepositRepositoryImpl) ListDepositsForAccountAndPage(
 	endIndex := page.Number * page.Size
 	index := 1
 	for _, v := range d.store.deposits {
-		if v.AccountIndex == accountIndex {
+		if v.AccountName == accountName {
 			if index >= startIndex && index <= endIndex {
 				result = append(result, v)
 			}

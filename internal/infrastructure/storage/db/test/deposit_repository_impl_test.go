@@ -33,11 +33,11 @@ func testAddAndListDeposits(t *testing.T, repo depositRepository) {
 	deposits := make([]domain.Deposit, 0, 10)
 	for i := 0; i < 10; i++ {
 		deposits = append(deposits, domain.Deposit{
-			TxID:         fmt.Sprintf("%d", i),
-			AccountIndex: 1,
-			VOut:         1,
-			Asset:        "dummy",
-			Value:        400,
+			TxID:        fmt.Sprintf("%d", i),
+			AccountName: "aaa",
+			VOut:        1,
+			Asset:       "dummy",
+			Value:       400,
 		})
 	}
 	count, err := depositRepository.AddDeposits(context.Background(), deposits)
@@ -45,31 +45,31 @@ func testAddAndListDeposits(t *testing.T, repo depositRepository) {
 	require.Equal(t, 10, count)
 
 	count, err = depositRepository.AddDeposits(context.Background(), []domain.Deposit{{
-		TxID:         "0",
-		AccountIndex: 1,
-		VOut:         1,
-		Asset:        "dummy",
-		Value:        400,
+		TxID:        "0",
+		AccountName: "aaa",
+		VOut:        1,
+		Asset:       "dummy",
+		Value:       400,
 	}})
 	require.NoError(t, err)
 	require.Zero(t, count)
 
-	deposits, err = depositRepository.ListDepositsForAccount(context.Background(), 0)
+	deposits, err = depositRepository.ListDepositsForAccount(context.Background(), "bbb")
 	require.NoError(t, err)
 	require.Empty(t, deposits)
 
-	deposits, err = depositRepository.ListDepositsForAccount(context.Background(), 1)
+	deposits, err = depositRepository.ListDepositsForAccount(context.Background(), "aaa")
 	require.NoError(t, err)
 	require.Len(t, deposits, 10)
 
 	deposits, err = depositRepository.ListDepositsForAccountAndPage(
-		context.Background(), 1, domain.Page{Number: 1, Size: 5},
+		context.Background(), "aaa", domain.Page{Number: 1, Size: 5},
 	)
 	require.NoError(t, err)
 	require.Len(t, deposits, 5)
 
 	deposits, err = depositRepository.ListDepositsForAccountAndPage(
-		context.Background(), 1, domain.Page{Number: 2, Size: 5},
+		context.Background(), "aaa", domain.Page{Number: 2, Size: 5},
 	)
 	require.NoError(t, err)
 	require.Len(t, deposits, 5)

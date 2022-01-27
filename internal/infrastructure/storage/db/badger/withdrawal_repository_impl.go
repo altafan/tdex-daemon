@@ -9,33 +9,34 @@ import (
 )
 
 type withdrawalRepositoryImpl struct {
-	store *badgerhold.Store
+	store        *badgerhold.Store
+	eventChannel chan domain.WithdrawalEvent
 }
 
 // NewWithdrawalRepositoryImpl initialize a badger implementation of the domain.StatsRepository
 func NewWithdrawalRepositoryImpl(store *badgerhold.Store) domain.WithdrawalRepository {
-	return withdrawalRepositoryImpl{store}
+	eventChannel := make(chan domain.WithdrawalEvent)
+	return withdrawalRepositoryImpl{store, eventChannel}
 }
 
 func (w withdrawalRepositoryImpl) AddWithdrawals(
-	ctx context.Context,
-	withdrawals []domain.Withdrawal,
+	ctx context.Context, withdrawals []domain.Withdrawal,
 ) (int, error) {
 	return w.insertWithdrawals(ctx, withdrawals)
 }
 
 func (w withdrawalRepositoryImpl) ListWithdrawalsForAccount(
-	ctx context.Context, accountIndex int,
+	ctx context.Context, accountName string,
 ) ([]domain.Withdrawal, error) {
-	query := badgerhold.Where("AccountIndex").Eq(accountIndex)
+	query := badgerhold.Where("AccountName").Eq(accountName)
 
 	return w.findWithdrawals(ctx, query)
 }
 
 func (w withdrawalRepositoryImpl) ListWithdrawalsForAccountAndPage(
-	ctx context.Context, accountIndex int, page domain.Page,
+	ctx context.Context, accountName string, page domain.Page,
 ) ([]domain.Withdrawal, error) {
-	query := badgerhold.Where("AccountIndex").Eq(accountIndex)
+	query := badgerhold.Where("AccountName").Eq(accountName)
 	from := page.Number*page.Size - page.Size
 	query.Skip(from).Limit(page.Size)
 
@@ -59,9 +60,12 @@ func (w withdrawalRepositoryImpl) ListAllWithdrawalsForPage(
 	return w.findWithdrawals(ctx, query)
 }
 
+func (w withdrawalRepositoryImpl) EventChannel() chan domain.WithdrawalEvent {
+	return w.eventChannel
+}
+
 func (w withdrawalRepositoryImpl) insertWithdrawals(
-	ctx context.Context,
-	withdrawals []domain.Withdrawal,
+	ctx context.Context, withdrawals []domain.Withdrawal,
 ) (int, error) {
 	count := 0
 	for _, ww := range withdrawals {
@@ -71,6 +75,10 @@ func (w withdrawalRepositoryImpl) insertWithdrawals(
 		}
 		if done {
 			count++
+			w.eventChannel <- domain.WithdrawalEvent{
+				EventType:  domain.NewWithdrawalEvent,
+				Withdrawal: ww,
+			}
 		}
 	}
 	return count, nil
@@ -78,8 +86,7 @@ func (w withdrawalRepositoryImpl) insertWithdrawals(
 }
 
 func (w withdrawalRepositoryImpl) insertWithdrawal(
-	ctx context.Context,
-	withdrawal domain.Withdrawal,
+	ctx context.Context, withdrawal domain.Withdrawal,
 ) (bool, error) {
 	var err error
 	if ctx.Value("tx") != nil {
@@ -98,8 +105,7 @@ func (w withdrawalRepositoryImpl) insertWithdrawal(
 }
 
 func (w withdrawalRepositoryImpl) findWithdrawals(
-	ctx context.Context,
-	query *badgerhold.Query,
+	ctx context.Context, query *badgerhold.Query,
 ) ([]domain.Withdrawal, error) {
 	var withdrawals []domain.Withdrawal
 	var err error

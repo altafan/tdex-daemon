@@ -2,7 +2,6 @@ package dbbadger
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -26,6 +25,9 @@ type repoManager struct {
 	tradeRepository      domain.TradeRepository
 	depositRepository    domain.DepositRepository
 	withdrawalRepository domain.WithdrawalRepository
+
+	handlerPerWithdrawalEvent map[domain.WithdrawalEventType]func(domain.WithdrawalEvent)
+	handlerPerTradeEvent      map[domain.TradeEventType]func(domain.TradeEvent)
 }
 
 // NewRepoManager opens (or creates if not exists) the badger store on disk.
@@ -59,16 +61,29 @@ func NewRepoManager(baseDbDir string, logger badger.Logger) (ports.RepoManager, 
 	tradeRepo := NewTradeRepositoryImpl(mainDb)
 	depositRepository := NewDepositRepositoryImpl(mainDb)
 	withdrawalRepository := NewWithdrawalRepositoryImpl(mainDb)
+	handlerPerTradeEvent := make(
+		map[domain.TradeEventType]func(domain.TradeEvent),
+	)
+	handlerPerWithdrawalEvent := make(
+		map[domain.WithdrawalEventType]func(domain.WithdrawalEvent),
+	)
 
-	return &repoManager{
-		store:                mainDb,
-		priceStore:           priceDb,
-		unspentStore:         unspentDb,
-		marketRepository:     marketRepo,
-		tradeRepository:      tradeRepo,
-		depositRepository:    depositRepository,
-		withdrawalRepository: withdrawalRepository,
-	}, nil
+	repoManager := &repoManager{
+		store:                     mainDb,
+		priceStore:                priceDb,
+		unspentStore:              unspentDb,
+		marketRepository:          marketRepo,
+		tradeRepository:           tradeRepo,
+		depositRepository:         depositRepository,
+		withdrawalRepository:      withdrawalRepository,
+		handlerPerTradeEvent:      handlerPerTradeEvent,
+		handlerPerWithdrawalEvent: handlerPerWithdrawalEvent,
+	}
+
+	go repoManager.listenToTradeEvents()
+	go repoManager.listenToWithdrawalEvents()
+
+	return repoManager, nil
 }
 
 func (d *repoManager) MarketRepository() domain.MarketRepository {
@@ -88,115 +103,44 @@ func (d *repoManager) WithdrawalRepository() domain.WithdrawalRepository {
 }
 
 func (d *repoManager) Close() {
+	tradeEventChannel := d.tradeRepository.EventChannel()
+	withdrawalEventChannel := d.withdrawalRepository.EventChannel()
 	d.store.Close()
 	d.priceStore.Close()
 	d.unspentStore.Close()
+	close(tradeEventChannel)
+	close(withdrawalEventChannel)
 }
 
-// NewTransaction implements the RepoManager interface
-func (d *repoManager) NewTransaction() ports.Transaction {
-	return d.store.Badger().NewTransaction(true)
+func (d *repoManager) RegisterHandlerForWithdrawalEvent(
+	eventType domain.WithdrawalEventType,
+	handler func(event domain.WithdrawalEvent),
+) {
+	d.handlerPerWithdrawalEvent[eventType] = handler
 }
 
-// NewPricesTransaction implements the RepoManager interface
-func (d *repoManager) NewPricesTransaction() ports.Transaction {
-	return d.priceStore.Badger().NewTransaction(true)
+func (d *repoManager) RegisterHandlerForTradeEvent(
+	eventType domain.TradeEventType,
+	handler func(event domain.TradeEvent),
+) {
+	d.handlerPerTradeEvent[eventType] = handler
 }
 
-// NewUnspentsTransaction implements the RepoManager interface
-func (d *repoManager) NewUnspentsTransaction() ports.Transaction {
-	return d.unspentStore.Badger().NewTransaction(true)
-}
-
-// RunTransaction invokes the given handler and retries in case the transaction
-// returns a conflict error
-func (d *repoManager) RunTransaction(
-	ctx context.Context,
-	readOnly bool,
-	handler func(ctx context.Context) (interface{}, error),
-) (interface{}, error) {
-	ctxMaker := func() (ports.Transaction, context.Context) {
-		tx := d.NewTransaction()
-		_ctx := context.WithValue(ctx, "tx", tx)
-		return tx, _ctx
-	}
-	return d.runTransaction(runTransactionArgs{
-		ctxMaker: ctxMaker,
-		readOnly: readOnly,
-		handler:  handler,
-	})
-}
-
-// RunUnspentsTransaction invokes the given handler and retries in case the
-// unspents transaction returns a conflict error
-func (d *repoManager) RunUnspentsTransaction(
-	ctx context.Context,
-	readOnly bool,
-	handler func(ctx context.Context) (interface{}, error),
-) (interface{}, error) {
-	ctxMaker := func() (ports.Transaction, context.Context) {
-		tx := d.NewUnspentsTransaction()
-		_ctx := context.WithValue(ctx, "utx", tx)
-		return tx, _ctx
-	}
-
-	return d.runTransaction(runTransactionArgs{
-		ctxMaker: ctxMaker,
-		readOnly: readOnly,
-		handler:  handler,
-	})
-}
-
-// RunPricesTransaction invokes the given handler and retries in case the
-// unspents transaction returns a conflict error
-func (d *repoManager) RunPricesTransaction(
-	ctx context.Context,
-	readOnly bool,
-	handler func(ctx context.Context) (interface{}, error),
-) (interface{}, error) {
-	ctxMaker := func() (ports.Transaction, context.Context) {
-		tx := d.NewPricesTransaction()
-		_ctx := context.WithValue(ctx, "ptx", tx)
-		return tx, _ctx
-	}
-
-	return d.runTransaction(runTransactionArgs{
-		ctxMaker: ctxMaker,
-		readOnly: readOnly,
-		handler:  handler,
-	})
-}
-
-type runTransactionArgs struct {
-	ctxMaker func() (ports.Transaction, context.Context)
-	readOnly bool
-	handler  func(ctx context.Context) (interface{}, error)
-}
-
-func (d *repoManager) runTransaction(
-	args runTransactionArgs,
-) (interface{}, error) {
-	for {
-		tx, ctx := args.ctxMaker()
-		res, err := args.handler(ctx)
-		if err != nil {
-			if args.readOnly && isTransactionConflict(err) {
-				time.Sleep(50 * time.Millisecond)
-				continue
-			}
-			return nil, err
+func (d *repoManager) listenToTradeEvents() {
+	for event := range d.tradeRepository.EventChannel() {
+		handler, ok := d.handlerPerTradeEvent[event.EventType]
+		if ok {
+			handler(event)
 		}
+	}
+}
 
-		if !args.readOnly {
-			if err := tx.Commit(); err != nil {
-				if !isTransactionConflict(err) {
-					return nil, err
-				}
-				time.Sleep(50 * time.Millisecond)
-				continue
-			}
+func (d *repoManager) listenToWithdrawalEvents() {
+	for event := range d.withdrawalRepository.EventChannel() {
+		handler, ok := d.handlerPerWithdrawalEvent[event.EventType]
+		if ok {
+			handler(event)
 		}
-		return res, nil
 	}
 }
 

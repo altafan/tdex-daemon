@@ -1,7 +1,6 @@
 package inmemory
 
 import (
-	"context"
 	"errors"
 	"sync"
 
@@ -11,8 +10,9 @@ import (
 )
 
 type marketInmemoryStore struct {
-	markets             map[int]domain.Market
-	accountsByAssetsKey map[string]int
+	markets             map[uint64]domain.Market
+	accountsByAssetsKey map[string]uint64
+	accountsByName      map[string]uint64
 	locker              *sync.Mutex
 }
 
@@ -64,8 +64,9 @@ func (tx *InmemoryTx) Discard() {
 
 func NewRepoManager() ports.RepoManager {
 	marketStore := &marketInmemoryStore{
-		markets:             map[int]domain.Market{},
-		accountsByAssetsKey: map[string]int{},
+		markets:             map[uint64]domain.Market{},
+		accountsByAssetsKey: map[string]uint64{},
+		accountsByName:      map[string]uint64{},
 		locker:              &sync.Mutex{},
 	}
 	tradeStore := &tradeInmemoryStore{
@@ -118,53 +119,14 @@ func (d *RepoManager) WithdrawalRepository() domain.WithdrawalRepository {
 
 func (d *RepoManager) Close() {}
 
-func (db *RepoManager) NewTransaction() ports.Transaction {
-	return &InmemoryTx{
-		db:      db,
-		success: false,
-	}
+func (db *RepoManager) RegisterHandlerForTradeEvent(
+	eventType domain.TradeEventType,
+	handler func(event domain.TradeEvent),
+) {
 }
 
-func (db *RepoManager) NewUnspentsTransaction() ports.Transaction {
-	return db.NewTransaction()
-}
-
-func (db *RepoManager) NewPricesTransaction() ports.Transaction {
-	return db.NewTransaction()
-}
-
-func (db *RepoManager) RunTransaction(
-	ctx context.Context,
-	_ bool,
-	handler func(ctx context.Context) (interface{}, error),
-) (interface{}, error) {
-	return db.runTransaction(ctx, handler)
-}
-
-func (db *RepoManager) RunUnspentsTransaction(
-	ctx context.Context,
-	readOnly bool,
-	handler func(ctx context.Context) (interface{}, error),
-) (interface{}, error) {
-	return db.RunTransaction(ctx, readOnly, handler)
-}
-
-func (db *RepoManager) RunPricesTransaction(
-	ctx context.Context,
-	readOnly bool,
-	handler func(ctx context.Context) (interface{}, error),
-) (interface{}, error) {
-	return db.RunTransaction(ctx, readOnly, handler)
-}
-
-func (db *RepoManager) runTransaction(
-	ctx context.Context,
-	handler func(ctx context.Context) (interface{}, error),
-) (interface{}, error) {
-	res, err := handler(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
+func (db *RepoManager) RegisterHandlerForWithdrawalEvent(
+	eventType domain.WithdrawalEventType,
+	handler func(event domain.WithdrawalEvent),
+) {
 }

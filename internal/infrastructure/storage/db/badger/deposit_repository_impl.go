@@ -18,23 +18,22 @@ func NewDepositRepositoryImpl(store *badgerhold.Store) domain.DepositRepository 
 }
 
 func (d depositRepositoryImpl) AddDeposits(
-	ctx context.Context,
-	deposits []domain.Deposit,
+	ctx context.Context, deposits []domain.Deposit,
 ) (int, error) {
 	return d.insertDeposits(ctx, deposits)
 }
 
 func (d depositRepositoryImpl) ListDepositsForAccount(
-	ctx context.Context, accountIndex int,
+	ctx context.Context, accountName string,
 ) ([]domain.Deposit, error) {
-	query := badgerhold.Where("AccountIndex").Eq(accountIndex)
+	query := badgerhold.Where("AccountName").Eq(accountName)
 	return d.findDeposits(ctx, query)
 }
 
 func (d depositRepositoryImpl) ListDepositsForAccountAndPage(
-	ctx context.Context, accountIndex int, page domain.Page,
+	ctx context.Context, accountName string, page domain.Page,
 ) ([]domain.Deposit, error) {
-	query := badgerhold.Where("AccountIndex").Eq(accountIndex)
+	query := badgerhold.Where("AccountName").Eq(accountName)
 	from := page.Number*page.Size - page.Size
 	query.Skip(from).Limit(page.Size)
 	return d.findDeposits(ctx, query)
@@ -57,8 +56,7 @@ func (d depositRepositoryImpl) ListAllDepositsForPage(
 }
 
 func (d depositRepositoryImpl) insertDeposits(
-	ctx context.Context,
-	deposits []domain.Deposit,
+	ctx context.Context, deposits []domain.Deposit,
 ) (int, error) {
 	count := 0
 	for _, dd := range deposits {
@@ -75,8 +73,7 @@ func (d depositRepositoryImpl) insertDeposits(
 }
 
 func (d depositRepositoryImpl) insertDeposit(
-	ctx context.Context,
-	deposit domain.Deposit,
+	ctx context.Context, deposit domain.Deposit,
 ) (bool, error) {
 	var err error
 	if ctx.Value("tx") != nil {
@@ -95,8 +92,7 @@ func (d depositRepositoryImpl) insertDeposit(
 }
 
 func (d depositRepositoryImpl) findDeposits(
-	ctx context.Context,
-	query *badgerhold.Query,
+	ctx context.Context, query *badgerhold.Query,
 ) ([]domain.Deposit, error) {
 	var deposits []domain.Deposit
 	var err error

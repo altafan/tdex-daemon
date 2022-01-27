@@ -6,16 +6,16 @@ import (
 	"github.com/tdex-network/tdex-daemon/internal/core/domain"
 )
 
-type WithdrawalRepositoryImpl struct {
+type withdrawalRepositoryImpl struct {
 	store *withdrawalInmemoryStore
 }
 
 // NewWithdrawalRepositoryImpl returns a new empty DepositRepositoryImpl
 func NewWithdrawalRepositoryImpl(store *withdrawalInmemoryStore) domain.WithdrawalRepository {
-	return &WithdrawalRepositoryImpl{store}
+	return &withdrawalRepositoryImpl{store}
 }
 
-func (w WithdrawalRepositoryImpl) AddWithdrawals(
+func (w withdrawalRepositoryImpl) AddWithdrawals(
 	_ context.Context,
 	withdrawals []domain.Withdrawal,
 ) (int, error) {
@@ -32,23 +32,23 @@ func (w WithdrawalRepositoryImpl) AddWithdrawals(
 	return count, nil
 }
 
-func (w WithdrawalRepositoryImpl) ListWithdrawalsForAccount(
-	_ context.Context, accountIndex int,
+func (w withdrawalRepositoryImpl) ListWithdrawalsForAccount(
+	_ context.Context, accountName string,
 ) ([]domain.Withdrawal, error) {
 	w.store.locker.RLock()
 	defer w.store.locker.RUnlock()
 
 	result := make([]domain.Withdrawal, 0)
 	for _, v := range w.store.withdrawals {
-		if v.AccountIndex == accountIndex {
+		if v.AccountName == accountName {
 			result = append(result, v)
 		}
 	}
 
 	return result, nil
 }
-func (w WithdrawalRepositoryImpl) ListWithdrawalsForAccountAndPage(
-	_ context.Context, accountIndex int, page domain.Page,
+func (w withdrawalRepositoryImpl) ListWithdrawalsForAccountAndPage(
+	_ context.Context, accountName string, page domain.Page,
 ) ([]domain.Withdrawal, error) {
 	w.store.locker.RLock()
 	defer w.store.locker.RUnlock()
@@ -58,7 +58,7 @@ func (w WithdrawalRepositoryImpl) ListWithdrawalsForAccountAndPage(
 	endIndex := page.Number * page.Size
 	index := 1
 	for _, v := range w.store.withdrawals {
-		if v.AccountIndex == accountIndex {
+		if v.AccountName == accountName {
 			if index >= startIndex && index <= endIndex {
 				result = append(result, v)
 			}
@@ -69,7 +69,7 @@ func (w WithdrawalRepositoryImpl) ListWithdrawalsForAccountAndPage(
 	return result, nil
 }
 
-func (w WithdrawalRepositoryImpl) ListAllWithdrawals(
+func (w withdrawalRepositoryImpl) ListAllWithdrawals(
 	_ context.Context,
 ) ([]domain.Withdrawal, error) {
 	withdrawals := make([]domain.Withdrawal, 0, len(w.store.withdrawals))
@@ -79,7 +79,7 @@ func (w WithdrawalRepositoryImpl) ListAllWithdrawals(
 	return withdrawals, nil
 }
 
-func (w WithdrawalRepositoryImpl) ListAllWithdrawalsForPage(
+func (w withdrawalRepositoryImpl) ListAllWithdrawalsForPage(
 	_ context.Context, page domain.Page,
 ) ([]domain.Withdrawal, error) {
 	withdrawals := make([]domain.Withdrawal, 0)
@@ -93,4 +93,8 @@ func (w WithdrawalRepositoryImpl) ListAllWithdrawalsForPage(
 		index++
 	}
 	return withdrawals, nil
+}
+
+func (w withdrawalRepositoryImpl) EventChannel() chan domain.WithdrawalEvent {
+	return nil
 }

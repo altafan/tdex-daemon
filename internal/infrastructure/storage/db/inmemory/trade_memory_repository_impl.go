@@ -148,6 +148,10 @@ func (r tradeRepositoryImpl) UpdateTrade(
 	return nil
 }
 
+func (r tradeRepositoryImpl) EventChannel() chan domain.TradeEvent {
+	return nil
+}
+
 func (r tradeRepositoryImpl) getOrCreateTrade(tradeID *uuid.UUID) (*domain.Trade, error) {
 	if tradeID != nil {
 		tr, ok := r.store.trades[*tradeID]
