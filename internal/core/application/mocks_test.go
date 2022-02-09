@@ -159,7 +159,7 @@ func (m *mockedAccountManager) DeriveAddressesForAccount(
 	return res, args.Error(1)
 }
 
-func (m *mockedAccountManager) DeriveChangeAddressForAccount(
+func (m *mockedAccountManager) DeriveChangeAddressesForAccount(
 	ctx context.Context, account string, numOfAddresses uint64,
 ) ([]ports.AddressInfo, error) {
 	args := m.Called(ctx, account, numOfAddresses)

@@ -218,11 +218,11 @@ func (w *wallet) SendToManyWithFeeTopup(
 		inputs = append(inputs, Utxo{u.TxID(), u.Index()})
 	}
 	if change > 0 {
-		addr, err := accountManager.DeriveChangeAddressForAccount(ctx, FeeAccount, 1)
+		addr, err := accountManager.DeriveChangeAddressesForAccount(ctx, FeeAccount, 1)
 		if err != nil {
 			return "", "", err
 		}
-		outputs = append(outputs, Output{w.nativeAsset, change, addr[0].Address()})
+		outputs = append(outputs, Output{w.nativeAsset, change, addr[0]})
 	}
 
 	// TODO: ensure feeAmount <= dummyFeeAmount, otherwise TBD.
@@ -281,14 +281,14 @@ func (w *wallet) FillSwapTransaction(
 		{swapRequest.GetAssetP(), swapRequest.GetAmountP(), addresses[0].Address},
 	}
 	if change > 0 {
-		addresses, err := w.AccountManager().DeriveChangeAddressForAccount(
+		addresses, err := w.AccountManager().DeriveChangeAddressesForAccount(
 			ctx, account, 1,
 		)
 		if err != nil {
 			return "", nil, nil, nil, err
 		}
 		outputs = append(outputs, Output{
-			swapRequest.GetAssetP(), change, addresses[0].Address(),
+			swapRequest.GetAssetP(), change, addresses[0],
 		})
 	}
 
@@ -302,14 +302,14 @@ func (w *wallet) FillSwapTransaction(
 	inputs = append(inputs, feeUtxos...)
 
 	if feeChange > 0 {
-		addresses, err := w.AccountManager().DeriveChangeAddressForAccount(
+		addresses, err := w.AccountManager().DeriveChangeAddressesForAccount(
 			ctx, FeeAccount, 1,
 		)
 		if err != nil {
 			return "", nil, nil, nil, err
 		}
 		outputs = append(outputs, Output{
-			w.nativeAsset, feeChange, addresses[0].Address(),
+			w.nativeAsset, feeChange, addresses[0],
 		})
 	}
 
@@ -372,7 +372,12 @@ func (w *wallet) RegisterHandlerForTxEvent(
 }
 
 func (w *wallet) listenToUtxoNotifications() {
-	for notification := range w.NotificationManager().UtxoChannel() {
+	channel, err := w.NotificationManager().UtxoChannel()
+	if err != nil {
+		panic(err)
+	}
+
+	for notification := range channel {
 		if _, ok := parseUtxoEventType(notification.EventType()); ok {
 			toRepeat := make([]UtxoNotificationHandler, 0)
 			for i := 0; i < w.UtxoNotificationHandlers.len(); i++ {
@@ -390,7 +395,12 @@ func (w *wallet) listenToUtxoNotifications() {
 }
 
 func (w *wallet) listenToTxNotifications() {
-	for notification := range w.NotificationManager().TxChannel() {
+	channel, err := w.NotificationManager().TxChannel()
+	if err != nil {
+		panic(err)
+	}
+
+	for notification := range channel {
 		if _, ok := parseTxEventType(notification.EventType()); ok {
 			toRepeat := make([]TxNotificationHandler, 0)
 			for i := 0; i < w.TxNotificationHandlers.len(); i++ {

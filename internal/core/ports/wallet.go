@@ -35,13 +35,13 @@ type AccountManager interface {
 	) (accountIndex uint64, xpub string, err error)
 	DeriveAddressesForAccount(
 		ctx context.Context, account string, numOfAddresses uint64,
-	) ([]AddressInfo, error)
-	DeriveChangeAddressForAccount(
+	) ([]string, error)
+	DeriveChangeAddressesForAccount(
 		ctx context.Context, account string, numOfAddresses uint64,
-	) ([]AddressInfo, error)
+	) ([]string, error)
 	ListAddressesForAccount(
 		ctx context.Context, account string,
-	) ([]AddressInfo, error)
+	) ([]string, error)
 	BalanceForAccount(
 		ctx context.Context, account string,
 	) (balancePerAsset map[string]Balance, err error)
@@ -85,8 +85,8 @@ type TransactionManager interface {
 }
 
 type NotificationManager interface {
-	TxChannel() chan TxNotification
-	UtxoChannel() chan UtxoNotification
+	TxChannel() (chan TxNotification, error)
+	UtxoChannel() (chan UtxoNotification, error)
 }
 
 type WalletInfo interface {
@@ -122,13 +122,6 @@ type InitWalletMsg interface {
 	Message() string
 }
 
-type AddressInfo interface {
-	Address() string
-	DerivationPath() string
-	OutputScript() string
-	BlindingPrivKey() string
-}
-
 type Balance interface {
 	Unconfirmed() uint64
 	Confirmed() uint64
@@ -142,7 +135,6 @@ type TxNotification interface {
 }
 
 type UtxoNotification interface {
-	AccountIndex() uint64
 	Utxo() UtxoKey
 	EventType() UtxoEventType
 	BlockDetails() BlockDetails
