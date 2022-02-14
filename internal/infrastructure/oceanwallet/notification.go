@@ -1,4 +1,4 @@
-package wallet
+package oceanwallet
 
 import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"

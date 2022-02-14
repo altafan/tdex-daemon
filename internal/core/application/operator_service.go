@@ -895,7 +895,7 @@ func (o *operatorService) FeeFragmenterSplitFunds(
 	i := 0
 	for _, amount := range fragmentedAmounts {
 		outputs = append(outputs, Output{
-			o.wallet.NativeAsset(), amount, addresses[i].Address(),
+			o.wallet.NativeAsset(), amount, addresses[i],
 		})
 		i++
 	}

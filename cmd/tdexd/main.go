@@ -16,6 +16,7 @@ import (
 	"github.com/tdex-network/tdex-daemon/config"
 	"github.com/tdex-network/tdex-daemon/internal/core/application"
 	"github.com/tdex-network/tdex-daemon/internal/core/ports"
+	"github.com/tdex-network/tdex-daemon/internal/infrastructure/oceanwallet"
 	webhookpubsub "github.com/tdex-network/tdex-daemon/internal/infrastructure/pubsub/webhook"
 	dbbadger "github.com/tdex-network/tdex-daemon/internal/infrastructure/storage/db/badger"
 	"github.com/tdex-network/tdex-daemon/internal/interfaces"
@@ -70,8 +71,12 @@ func main() {
 		return
 	}
 
-	// TODO: setup a portable wallet
-	wallet, err := application.NewWallet(nil)
+	// TODO: move to config ? or constant ?
+	// who is running the ocean server ? the daemon ?
+	addrOceanServer := "localhost:50051"
+	oceanWallet := oceanwallet.New(addrOceanServer)
+
+	wallet, err := application.NewWallet(oceanWallet)
 	if err != nil {
 		log.Errorf("error while setting up internal wallet: %s", err)
 		return

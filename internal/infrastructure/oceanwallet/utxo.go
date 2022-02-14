@@ -1,4 +1,4 @@
-package wallet
+package oceanwallet
 
 import (
 	"github.com/tdex-network/tdex-daemon/internal/core/ports"
