@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/tdex-network/tdex-daemon/internal/core/ports"
-	"github.com/tdex-network/tdex-daemon/internal/infrastructure/oceanv1alpha"
+	oceanv1alpha "github.com/vulpemventures/ocean/api-spec/protobuf/gen/go/ocean/v1alpha"
 	"google.golang.org/grpc"
 )
 
@@ -49,8 +49,8 @@ func (tm *transactionManagerGrpc) SelectUnspentsForAccount(
 		return nil, 0, err
 	}
 
-	utxos = make([]ports.UtxoKey, len(resp.Utxos))
-	for i, u := range resp.Utxos {
+	utxos = make([]ports.UtxoKey, len(resp.Utxos.Utxos))
+	for i, u := range resp.Utxos.Utxos {
 		utxos[i] = newUtxoGrpc(u)
 	}
 
@@ -68,14 +68,14 @@ func (tm *transactionManagerGrpc) EstimateFees(
 	for i, in := range inputs {
 		req.Inputs[i] = &oceanv1alpha.Input{
 			Txid:  in.TxID(),
-			Index: int64(in.Index()),
+			Index: in.Index(),
 		}
 	}
 
 	for i, out := range outputs {
 		req.Outputs[i] = &oceanv1alpha.Output{
 			Asset:   out.Asset(),
-			Amount:  int64(out.Value()),
+			Amount:  out.Value(),
 			Address: out.Address(),
 		}
 	}
@@ -100,7 +100,7 @@ func (tm *transactionManagerGrpc) TransferFromAccount(
 	for i, out := range outputs {
 		req.Receivers[i] = &oceanv1alpha.Output{
 			Asset:   out.Asset(),
-			Amount:  int64(out.Value()),
+			Amount:  out.Value(),
 			Address: out.Address(),
 		}
 	}
@@ -124,14 +124,14 @@ func (tm *transactionManagerGrpc) CreateTransaction(
 	for i, in := range inputs {
 		req.Inputs[i] = &oceanv1alpha.Input{
 			Txid:  in.TxID(),
-			Index: int64(in.Index()),
+			Index: in.Index(),
 		}
 	}
 
 	for i, out := range outputs {
 		req.Outputs[i] = &oceanv1alpha.Output{
 			Asset:   out.Asset(),
-			Amount:  int64(out.Value()),
+			Amount:  out.Value(),
 			Address: out.Address(),
 		}
 	}
@@ -158,14 +158,14 @@ func (tm *transactionManagerGrpc) UpdateTransaction(ctx context.Context, psetBas
 	for i, in := range inputs {
 		req.Inputs[i] = &oceanv1alpha.Input{
 			Txid:  in.TxID(),
-			Index: int64(in.Index()),
+			Index: in.Index(),
 		}
 	}
 
 	for i, out := range outputs {
 		req.Outputs[i] = &oceanv1alpha.Output{
 			Asset:   out.Asset(),
-			Amount:  int64(out.Value()),
+			Amount:  out.Value(),
 			Address: out.Address(),
 		}
 	}

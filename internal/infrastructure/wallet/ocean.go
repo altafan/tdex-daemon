@@ -3,6 +3,7 @@ package wallet
 import (
 	"github.com/tdex-network/tdex-daemon/internal/core/ports"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type oceanGrpcWallet struct {
@@ -14,8 +15,10 @@ type oceanGrpcWallet struct {
 
 var _ ports.OceanWallet = (*oceanGrpcWallet)(nil)
 
+// NewOceanGrpcWallet creates a new OceanWallet instance.
+// it uses an ocean grpc client to communicate with the ocean server.
 func NewOceanWallet(addr string) (ports.OceanWallet, error) {
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}

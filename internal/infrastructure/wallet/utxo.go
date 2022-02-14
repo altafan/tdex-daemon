@@ -2,8 +2,7 @@ package wallet
 
 import (
 	"github.com/tdex-network/tdex-daemon/internal/core/ports"
-	"github.com/tdex-network/tdex-daemon/internal/infrastructure/oceanv1alpha"
-	"github.com/vulpemventures/go-elements/elementsutil"
+	oceanv1alpha "github.com/vulpemventures/ocean/api-spec/protobuf/gen/go/ocean/v1alpha"
 )
 
 type utxoGrpc struct {
@@ -32,16 +31,11 @@ func (u *utxoGrpc) Key() ports.UtxoKey {
 }
 
 func (u *utxoGrpc) Asset() string {
-	return string(u.grpcUtxo.Asset) // TODO change after ocean changes
+	return u.grpcUtxo.Asset
 }
 
 func (u *utxoGrpc) Value() uint64 {
-	v, e := elementsutil.ElementsToSatoshiValue(u.grpcUtxo.Value)
-	if e != nil {
-		panic(e)
-	}
-
-	return v
+	return u.grpcUtxo.Value
 }
 
 func (u *utxoGrpc) Script() []byte {

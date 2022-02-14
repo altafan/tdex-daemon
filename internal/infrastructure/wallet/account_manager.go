@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/tdex-network/tdex-daemon/internal/core/ports"
-	"github.com/tdex-network/tdex-daemon/internal/infrastructure/oceanv1alpha"
+	oceanv1alpha "github.com/vulpemventures/ocean/api-spec/protobuf/gen/go/ocean/v1alpha"
 	"google.golang.org/grpc"
 )
 
@@ -109,19 +109,15 @@ func (am *accountManagerGrpc) ListUtxosForAccount(ctx context.Context, account s
 		return nil, nil, err
 	}
 
-	spendableUtxos := make([]ports.Utxo, 0, len(resp.SpendableUtxos))
-	lockedUtxos := make([]ports.Utxo, 0, len(resp.LockedUtxos))
+	spendableUtxos := make([]ports.Utxo, 0, len(resp.SpendableUtxos.Utxos))
+	lockedUtxos := make([]ports.Utxo, 0, len(resp.LockedUtxos.Utxos))
 
-	for _, utxos := range resp.SpendableUtxos {
-		for _, utxo := range utxos.Utxos {
-			spendableUtxos = append(spendableUtxos, &utxoGrpc{utxo})
-		}
+	for _, utxo := range resp.SpendableUtxos.Utxos {
+		spendableUtxos = append(spendableUtxos, newUtxoGrpc(utxo))
 	}
 
-	for _, utxos := range resp.LockedUtxos {
-		for _, utxo := range utxos.Utxos {
-			lockedUtxos = append(lockedUtxos, &utxoGrpc{utxo})
-		}
+	for _, utxo := range resp.LockedUtxos.Utxos {
+		lockedUtxos = append(lockedUtxos, newUtxoGrpc(utxo))
 	}
 
 	return spendableUtxos, lockedUtxos, nil

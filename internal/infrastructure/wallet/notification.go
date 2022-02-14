@@ -3,7 +3,7 @@ package wallet
 import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/tdex-network/tdex-daemon/internal/core/ports"
-	"github.com/tdex-network/tdex-daemon/internal/infrastructure/oceanv1alpha"
+	oceanv1alpha "github.com/vulpemventures/ocean/api-spec/protobuf/gen/go/ocean/v1alpha"
 )
 
 type txEventType struct {
@@ -97,11 +97,11 @@ type utxoNotificationGrpc struct {
 var _ ports.UtxoNotification = (*utxoNotificationGrpc)(nil)
 
 func (n *utxoNotificationGrpc) Utxo() ports.UtxoKey {
-	return &utxoGrpc{n.resp.Utxos[0].Utxo}
+	return &utxoGrpc{n.resp.Utxo}
 }
 
 func (n *utxoNotificationGrpc) EventType() ports.UtxoEventType {
-	return &utxoEventType{n.resp.Utxos[0].EventType}
+	return &utxoEventType{n.resp.EventType}
 }
 
 func (n *utxoNotificationGrpc) BlockDetails() ports.BlockDetails {

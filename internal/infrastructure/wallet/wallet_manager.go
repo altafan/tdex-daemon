@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/tdex-network/tdex-daemon/internal/core/ports"
-	"github.com/tdex-network/tdex-daemon/internal/infrastructure/oceanv1alpha"
+	oceanv1alpha "github.com/vulpemventures/ocean/api-spec/protobuf/gen/go/ocean/v1alpha"
 	"google.golang.org/grpc"
 )
 
@@ -34,7 +34,7 @@ func (wm *walletManagerGrpc) GenSeed(ctx context.Context) (mnemonic []string, er
 func (wm *walletManagerGrpc) CreateWallet(ctx context.Context, mnemonic []string, passphrase string, chMessages chan string) (err error) {
 	req := &oceanv1alpha.CreateWalletRequest{
 		Mnemonic: strings.Join(mnemonic, " "),
-		Password: []byte(passphrase),
+		Password: passphrase,
 	}
 
 	_, err = wm.client.CreateWallet(ctx, req)
@@ -44,7 +44,7 @@ func (wm *walletManagerGrpc) CreateWallet(ctx context.Context, mnemonic []string
 func (wm *walletManagerGrpc) RestoreWallet(ctx context.Context, mnemonic []string, passphrase string, chMessages chan string) error {
 	req := &oceanv1alpha.RestoreWalletRequest{
 		Mnemonic: strings.Join(mnemonic, " "),
-		Password: []byte(passphrase),
+		Password: passphrase,
 	}
 
 	_, err := wm.client.RestoreWallet(ctx, req)
@@ -57,7 +57,7 @@ func (wm *walletManagerGrpc) RestoreWallet(ctx context.Context, mnemonic []strin
 
 func (wm *walletManagerGrpc) Unlock(ctx context.Context, passphrase string) error {
 	req := &oceanv1alpha.UnlockRequest{
-		Password: []byte(passphrase),
+		Password: passphrase,
 	}
 
 	_, err := wm.client.Unlock(ctx, req)
@@ -70,8 +70,8 @@ func (wm *walletManagerGrpc) Unlock(ctx context.Context, passphrase string) erro
 
 func (wm *walletManagerGrpc) ChangePassword(ctx context.Context, oldPassphrase string, newPassphrase string) error {
 	req := &oceanv1alpha.ChangePasswordRequest{
-		CurrentPassword: []byte(oldPassphrase),
-		NewPassword:     []byte(newPassphrase),
+		CurrentPassword: oldPassphrase,
+		NewPassword:     newPassphrase,
 	}
 
 	_, err := wm.client.ChangePassword(ctx, req)
