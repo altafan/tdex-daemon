@@ -13,8 +13,6 @@ type accountManagerGrpc struct {
 	client oceanv1alpha.AccountServiceClient
 }
 
-var _ ports.AccountManager = (*accountManagerGrpc)(nil)
-
 func newAccountManagerGrpc(conn *grpc.ClientConn) ports.AccountManager {
 	return &accountManagerGrpc{
 		client: oceanv1alpha.NewAccountServiceClient(conn),

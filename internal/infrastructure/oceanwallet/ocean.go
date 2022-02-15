@@ -13,8 +13,6 @@ type oceanGrpcWallet struct {
 	a ports.AccountManager
 }
 
-var _ ports.OceanWallet = (*oceanGrpcWallet)(nil)
-
 // NewOceanGrpcWallet creates a new OceanWallet instance.
 // it uses an ocean grpc client to communicate with the ocean server.
 func New(addr string) (ports.OceanWallet, error) {

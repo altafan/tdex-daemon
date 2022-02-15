@@ -12,8 +12,6 @@ type transactionManagerGrpc struct {
 	client oceanv1alpha.TransactionServiceClient
 }
 
-var _ ports.TransactionManager = (*transactionManagerGrpc)(nil)
-
 func newTransactionManagerGrpc(conn *grpc.ClientConn) ports.TransactionManager {
 	client := oceanv1alpha.NewTransactionServiceClient(conn)
 	return &transactionManagerGrpc{

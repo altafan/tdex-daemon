@@ -12,8 +12,6 @@ type notificationsManagerGrpc struct {
 	client oceanv1alpha.NotificationServiceClient
 }
 
-var _ ports.NotificationManager = (*notificationsManagerGrpc)(nil)
-
 func newNotificationsManagerGrpc(conn *grpc.ClientConn) ports.NotificationManager {
 	return &notificationsManagerGrpc{
 		client: oceanv1alpha.NewNotificationServiceClient(conn),

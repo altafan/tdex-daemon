@@ -13,8 +13,6 @@ type walletManagerGrpc struct {
 	client oceanv1alpha.WalletServiceClient
 }
 
-var _ ports.WalletManager = (*walletManagerGrpc)(nil)
-
 func newWalletManagerGrpc(conn *grpc.ClientConn) ports.WalletManager {
 	return &walletManagerGrpc{
 		client: oceanv1alpha.NewWalletServiceClient(conn),
