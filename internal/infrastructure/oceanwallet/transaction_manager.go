@@ -49,12 +49,12 @@ func (tm *transactionManagerGrpc) SelectUnspentsForAccount(
 		return nil, 0, err
 	}
 
-	utxos = make([]ports.UtxoKey, len(resp.Utxos.Utxos))
-	for i, u := range resp.Utxos.Utxos {
+	utxos = make([]ports.UtxoKey, len(resp.GetUtxos().GetUtxos()))
+	for i, u := range resp.GetUtxos().GetUtxos() {
 		utxos[i] = newUtxoGrpc(u)
 	}
 
-	return utxos, resp.Change, nil
+	return utxos, resp.GetChange(), nil
 }
 
 func (tm *transactionManagerGrpc) EstimateFees(
@@ -85,7 +85,7 @@ func (tm *transactionManagerGrpc) EstimateFees(
 		return 0, err
 	}
 
-	return resp.FeeAmount, nil
+	return resp.GetFeeAmount(), nil
 }
 
 func (tm *transactionManagerGrpc) TransferFromAccount(
@@ -110,7 +110,7 @@ func (tm *transactionManagerGrpc) TransferFromAccount(
 		return "", err
 	}
 
-	return resp.TxHex, nil
+	return resp.GetTxHex(), nil
 }
 
 func (tm *transactionManagerGrpc) CreateTransaction(
@@ -141,7 +141,7 @@ func (tm *transactionManagerGrpc) CreateTransaction(
 		return "", err
 	}
 
-	return resp.Pset, nil
+	return resp.GetPset(), nil
 }
 
 func (tm *transactionManagerGrpc) UpdateTransaction(ctx context.Context, psetBase64 string, inputs []ports.Input, outputs []ports.Output) (
@@ -176,7 +176,7 @@ func (tm *transactionManagerGrpc) UpdateTransaction(ctx context.Context, psetBas
 	}
 
 	// TODO blinding keys maps
-	return resp.Pset, nil, nil, nil
+	return resp.GetPset(), nil, nil, nil
 }
 
 func (tm *transactionManagerGrpc) BlindTransaction(ctx context.Context, psetBase64 string, lastBlinder bool) (string, error) {
@@ -190,7 +190,7 @@ func (tm *transactionManagerGrpc) BlindTransaction(ctx context.Context, psetBase
 		return "", err
 	}
 
-	return resp.Pset, nil
+	return resp.GetPset(), nil
 }
 
 func (tm *transactionManagerGrpc) SignTransaction(ctx context.Context, psetBase64 string, extractRawTx bool) (string, error) {
@@ -203,7 +203,7 @@ func (tm *transactionManagerGrpc) SignTransaction(ctx context.Context, psetBase6
 		return "", err
 	}
 
-	return resp.Pset, nil
+	return resp.GetPset(), nil
 }
 
 func (tm *transactionManagerGrpc) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
@@ -216,5 +216,5 @@ func (tm *transactionManagerGrpc) BroadcastTransaction(ctx context.Context, txHe
 		return "", err
 	}
 
-	return resp.Txid, nil
+	return resp.GetTxid(), nil
 }

@@ -137,8 +137,6 @@ type TxNotification interface {
 type UtxoNotification interface {
 	Utxo() UtxoKey
 	EventType() UtxoEventType
-	BlockDetails() BlockDetails
-	TxDetails() TxDetails
 }
 
 type TxEventType interface {

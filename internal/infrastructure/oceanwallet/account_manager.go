@@ -31,7 +31,7 @@ func (am *accountManagerGrpc) CreateAccount(ctx context.Context, name string) (u
 		return 0, "", err
 	}
 
-	return resp.AccountIndex, resp.Xpub, nil
+	return resp.GetAccountIndex(), resp.GetXpub(), nil
 }
 
 func (am *accountManagerGrpc) DeriveAddressesForAccount(ctx context.Context, account string, num uint64) ([]string, error) {
@@ -45,7 +45,7 @@ func (am *accountManagerGrpc) DeriveAddressesForAccount(ctx context.Context, acc
 		return nil, err
 	}
 
-	return resp.Addresses, nil
+	return resp.GetAddresses(), nil
 }
 
 func (am *accountManagerGrpc) DeriveChangeAddressesForAccount(ctx context.Context, account string, num uint64) ([]string, error) {
@@ -59,7 +59,7 @@ func (am *accountManagerGrpc) DeriveChangeAddressesForAccount(ctx context.Contex
 		return nil, err
 	}
 
-	return resp.Addresses, nil
+	return resp.GetAddresses(), nil
 }
 
 func (am *accountManagerGrpc) ListAddressesForAccount(ctx context.Context, account string) ([]string, error) {
@@ -72,7 +72,7 @@ func (am *accountManagerGrpc) ListAddressesForAccount(ctx context.Context, accou
 		return nil, err
 	}
 
-	return resp.Addresses, nil
+	return resp.GetAddresses(), nil
 }
 
 func (am *accountManagerGrpc) BalanceForAccount(
@@ -88,7 +88,7 @@ func (am *accountManagerGrpc) BalanceForAccount(
 	}
 
 	balances := make(map[string]ports.Balance)
-	for asset, b := range resp.Balance {
+	for asset, b := range resp.GetBalance() {
 		balances[asset] = &balanceGrpc{b}
 	}
 
@@ -109,14 +109,17 @@ func (am *accountManagerGrpc) ListUtxosForAccount(ctx context.Context, account s
 		return nil, nil, err
 	}
 
-	spendableUtxos := make([]ports.Utxo, 0, len(resp.SpendableUtxos.Utxos))
-	lockedUtxos := make([]ports.Utxo, 0, len(resp.LockedUtxos.Utxos))
+	respSpendable := resp.GetSpendableUtxos().GetUtxos()
+	respLocked := resp.GetLockedUtxos().GetUtxos()
 
-	for _, utxo := range resp.SpendableUtxos.Utxos {
+	spendableUtxos := make([]ports.Utxo, 0, len(respSpendable))
+	lockedUtxos := make([]ports.Utxo, 0, len(respLocked))
+
+	for _, utxo := range respSpendable {
 		spendableUtxos = append(spendableUtxos, newUtxoGrpc(utxo))
 	}
 
-	for _, utxo := range resp.LockedUtxos.Utxos {
+	for _, utxo := range respLocked {
 		lockedUtxos = append(lockedUtxos, newUtxoGrpc(utxo))
 	}
 

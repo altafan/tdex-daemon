@@ -12,17 +12,17 @@ type accountGrpc struct {
 var _ ports.WalletAccount = (*accountGrpc)(nil)
 
 func (a *accountGrpc) Index() uint64 {
-	return a.accountInfo.AccountKey.Id
+	return a.accountInfo.GetAccountKey().GetId()
 }
 
 func (a *accountGrpc) Name() string {
-	return a.accountInfo.AccountKey.Name
+	return a.accountInfo.GetAccountKey().GetName()
 }
 
 func (a *accountGrpc) DerivationPath() string {
-	return a.accountInfo.DerivationPath
+	return a.accountInfo.GetDerivationPath()
 }
 
 func (a *accountGrpc) Xpub() string {
-	return a.accountInfo.Xpub
+	return a.accountInfo.GetXpub()
 }

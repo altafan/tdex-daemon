@@ -12,13 +12,13 @@ type walletStatusGrpc struct {
 var _ ports.WalletStatus = (*walletStatusGrpc)(nil)
 
 func (s *walletStatusGrpc) IsUnlocked() bool {
-	return s.resp.Unlocked
+	return s.resp.GetUnlocked()
 }
 
 func (s *walletStatusGrpc) IsSynced() bool {
-	return s.resp.Synced
+	return s.resp.GetSynced()
 }
 
 func (s *walletStatusGrpc) IsInitialized() bool {
-	return s.resp.Initialized
+	return s.resp.GetInitialized()
 }

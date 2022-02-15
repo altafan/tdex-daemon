@@ -12,13 +12,13 @@ type balanceGrpc struct {
 var _ ports.Balance = (*balanceGrpc)(nil)
 
 func (b *balanceGrpc) Total() uint64 {
-	return b.infos.TotalBalance
+	return b.infos.GetTotalBalance()
 }
 
 func (b *balanceGrpc) Unconfirmed() uint64 {
-	return b.infos.UnconfirmedBalance
+	return b.infos.GetConfirmedBalance()
 }
 
 func (b *balanceGrpc) Confirmed() uint64 {
-	return b.infos.ConfirmedBalance
+	return b.infos.GetConfirmedBalance()
 }

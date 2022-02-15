@@ -28,7 +28,7 @@ func (wm *walletManagerGrpc) GenSeed(ctx context.Context) (mnemonic []string, er
 		return nil, err
 	}
 
-	return strings.Split(resp.Mnemonic, " "), nil
+	return strings.Split(resp.GetMnemonic(), " "), nil
 }
 
 func (wm *walletManagerGrpc) CreateWallet(ctx context.Context, mnemonic []string, passphrase string, chMessages chan string) (err error) {

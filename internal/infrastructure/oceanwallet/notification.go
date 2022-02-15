@@ -35,7 +35,7 @@ type blockDetailsGrpc struct {
 var _ ports.BlockDetails = (*blockDetailsGrpc)(nil)
 
 func (b *blockDetailsGrpc) Hash() string {
-	h, err := chainhash.NewHash(b.details.Hash)
+	h, err := chainhash.NewHash(b.details.GetHash())
 	if err != nil {
 		panic(err)
 	}
@@ -43,11 +43,11 @@ func (b *blockDetailsGrpc) Hash() string {
 }
 
 func (b *blockDetailsGrpc) Height() uint32 {
-	return uint32(b.details.Height)
+	return uint32(b.details.GetHeight())
 }
 
 func (b *blockDetailsGrpc) Timestamp() int64 {
-	return b.details.Timestamp
+	return b.details.GetTimestamp()
 }
 
 type txNotificationGrpc struct {
@@ -57,15 +57,15 @@ type txNotificationGrpc struct {
 var _ ports.TxNotification = (*txNotificationGrpc)(nil)
 
 func (n *txNotificationGrpc) TxID() string {
-	return n.resp.Txid
+	return n.resp.GetTxid()
 }
 
 func (n *txNotificationGrpc) EventType() ports.TxEventType {
-	return &txEventType{n.resp.EventType}
+	return &txEventType{n.resp.GetEventType()}
 }
 
 func (n *txNotificationGrpc) BlockDetails() ports.BlockDetails {
-	return &blockDetailsGrpc{n.resp.BlockDetails}
+	return &blockDetailsGrpc{n.resp.GetBlockDetails()}
 }
 
 type utxoEventType struct {
@@ -97,17 +97,9 @@ type utxoNotificationGrpc struct {
 var _ ports.UtxoNotification = (*utxoNotificationGrpc)(nil)
 
 func (n *utxoNotificationGrpc) Utxo() ports.UtxoKey {
-	return &utxoGrpc{n.resp.Utxo}
+	return &utxoGrpc{n.resp.GetUtxo()}
 }
 
 func (n *utxoNotificationGrpc) EventType() ports.UtxoEventType {
-	return &utxoEventType{n.resp.EventType}
-}
-
-func (n *utxoNotificationGrpc) BlockDetails() ports.BlockDetails {
-	panic("not implemented")
-}
-
-func (n *utxoNotificationGrpc) TxDetails() ports.TxDetails {
-	panic("not implemented")
+	return &utxoEventType{n.resp.GetEventType()}
 }

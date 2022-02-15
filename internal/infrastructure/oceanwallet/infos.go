@@ -34,24 +34,24 @@ type walletInfosGrpc struct {
 var _ ports.WalletInfo = (*walletInfosGrpc)(nil)
 
 func (w *walletInfosGrpc) Network() ports.Network {
-	return &networkGrpc{w.resp.Network}
+	return &networkGrpc{w.resp.GetNetwork()}
 }
 
 func (w *walletInfosGrpc) NativeAsset() string {
-	return w.resp.NativeAsset
+	return w.resp.GetNativeAsset()
 }
 
 func (w *walletInfosGrpc) RootPath() string {
-	return w.resp.RootPath
+	return w.resp.GetRootPath()
 }
 
 func (w *walletInfosGrpc) MasterBlindingKey() string {
-	return w.resp.MasterBlindingKey
+	return w.resp.GetMasterBlindingKey()
 }
 
 func (w *walletInfosGrpc) Accounts() []ports.WalletAccount {
 	var accounts []ports.WalletAccount
-	for _, a := range w.resp.Accounts {
+	for _, a := range w.resp.GetAccounts() {
 		accounts = append(accounts, &accountGrpc{accountInfo: a})
 	}
 	return accounts
