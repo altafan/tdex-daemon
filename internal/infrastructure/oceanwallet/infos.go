@@ -9,8 +9,6 @@ type networkGrpc struct {
 	n oceanv1alpha.GetInfoResponse_Network
 }
 
-var _ ports.Network = (*networkGrpc)(nil)
-
 func (net *networkGrpc) IsMainnet() bool {
 	return net.n == oceanv1alpha.GetInfoResponse_NETWORK_MAINNET
 }
@@ -30,8 +28,6 @@ func (net *networkGrpc) IsUnknown() bool {
 type walletInfosGrpc struct {
 	resp *oceanv1alpha.GetInfoResponse
 }
-
-var _ ports.WalletInfo = (*walletInfosGrpc)(nil)
 
 func (w *walletInfosGrpc) Network() ports.Network {
 	return &networkGrpc{w.resp.GetNetwork()}

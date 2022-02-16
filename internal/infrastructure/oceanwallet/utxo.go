@@ -15,11 +15,8 @@ func newUtxoGrpc(grpcUtxo *oceanv1alpha.Utxo) *utxoGrpc {
 	}
 }
 
-var _ ports.UtxoKey = (*utxoGrpc)(nil)
-var _ ports.Utxo = (*utxoGrpc)(nil)
-
 func (u *utxoGrpc) TxID() string {
-	return u.grpcUtxo.Txid
+	return u.grpcUtxo.GetTxid()
 }
 
 func (u *utxoGrpc) Index() uint32 {

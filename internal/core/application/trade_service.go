@@ -473,8 +473,11 @@ func (t *tradeService) tradeSettleOrExpire(
 	return func(notification ports.UtxoNotification) bool {
 		utxo := notification.Utxo()
 		eventType := notification.EventType()
-		txDetails := notification.TxDetails()
-		blockDetails := notification.BlockDetails()
+		txDetails, blockDetails, err := t.wallet.TransactionManager().GetTransaction(context.Background(), utxo.TxID())
+		if err != nil {
+			return false
+		}
+
 		isSelectedUtxo := false
 		for _, u := range selectedUtxos {
 			if utxo.TxID() == u.TxID() && utxo.Index() == u.Index() {

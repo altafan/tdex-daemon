@@ -52,6 +52,7 @@ type AccountManager interface {
 }
 
 type TransactionManager interface {
+	GetTransaction(ctx context.Context, txid string) (tx TxDetails, block BlockDetails, err error)
 	SelectUnspentsForAccount(
 		ctx context.Context, account string,
 		targetAsset string, targetAmount uint64, strategy Strategy,
@@ -135,6 +136,7 @@ type TxNotification interface {
 }
 
 type UtxoNotification interface {
+	AccountIndex() uint64
 	Utxo() UtxoKey
 	EventType() UtxoEventType
 }

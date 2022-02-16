@@ -31,6 +31,24 @@ func strategyToProto(s ports.Strategy) oceanv1alpha.SelectUtxosRequest_Strategy 
 	return oceanv1alpha.SelectUtxosRequest_STRATEGY_UNSPECIFIED
 }
 
+func (tm *transactionManagerGrpc) GetTransaction(ctx context.Context, txid string) (ports.TxDetails, ports.BlockDetails, error) {
+	req := &oceanv1alpha.GetTransactionRequest{
+		Txid: txid,
+	}
+
+	resp, err := tm.client.GetTransaction(ctx, req)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	txDetails, err := newTxDetails(resp.GetTxHex())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return txDetails, &blockDetailsGrpc{details: resp.GetBlockDetails()}, nil
+}
+
 func (tm *transactionManagerGrpc) SelectUnspentsForAccount(
 	ctx context.Context, account string,
 	targetAsset string, targetAmount uint64, strategy ports.Strategy,
