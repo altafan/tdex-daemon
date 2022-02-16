@@ -91,6 +91,8 @@ const (
 	// 20 consecutive unused addresses, or those not involved in any transaction
 	// in the blockchain.
 	RescanGapLimitKey = "RESCAN_GAP_LIMIT"
+	// OceanWalletEndpointKey defines the address of the running ocean wallet gRPC server
+	OceanWalletEndpointKey = "OCEAN_WALLET_ENDPOINT"
 
 	DbLocation        = "db"
 	TLSLocation       = "tls"
@@ -130,6 +132,7 @@ func init() {
 	vip.SetDefault(CBFailingRatioKey, 0.7)
 	vip.SetDefault(RescanRangeStartKey, 0)
 	vip.SetDefault(RescanGapLimitKey, 50)
+	vip.SetDefault(OceanWalletEndpointKey, "localhost:50051")
 
 	if err := validate(); err != nil {
 		log.Fatalf("error while validating config: %s", err)

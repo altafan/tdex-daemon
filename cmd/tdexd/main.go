@@ -41,6 +41,7 @@ var (
 	tradeTLSCert            = config.GetString(config.TradeTLSCertKey)
 	operatorTLSExtraIPs     = config.GetStringSlice(config.OperatorExtraIPKey)
 	operatorTLSExtraDomains = config.GetStringSlice(config.OperatorExtraDomainKey)
+	oceanWalletEndpoint     = config.GetString(config.OceanWalletEndpointKey)
 	// App services config
 	marketsFee                    = int64(config.GetFloat(config.DefaultFeeKey) * 100)
 	marketsBaseAsset              = config.GetString(config.BaseAssetKey)
@@ -71,10 +72,11 @@ func main() {
 		return
 	}
 
-	// TODO: move to config ? or constant ?
-	// who is running the ocean server ? the daemon ?
-	addrOceanServer := "localhost:50051"
-	oceanWallet := oceanwallet.New(addrOceanServer)
+	oceanWallet, err := oceanwallet.New(oceanWalletEndpoint)
+	if err != nil {
+		log.Errorf("error while setting up ocean wallet: %s", err)
+		return
+	}
 
 	wallet, err := application.NewWallet(oceanWallet)
 	if err != nil {
