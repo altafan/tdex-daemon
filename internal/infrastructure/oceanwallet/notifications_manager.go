@@ -2,7 +2,9 @@ package oceanwallet
 
 import (
 	"context"
+	"io"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tdex-network/tdex-daemon/internal/core/ports"
 	oceanv1alpha "github.com/vulpemventures/ocean/api-spec/protobuf/gen/go/ocean/v1alpha"
 	"google.golang.org/grpc"
@@ -31,7 +33,13 @@ func (nm *notificationsManagerGrpc) TxChannel() (chan ports.TxNotification, erro
 		for {
 			resp, err := stream.Recv()
 			if err != nil {
-				return
+				if err == io.EOF {
+					close(txChan)
+					break
+				}
+
+				logrus.Debug("Error receiving transaction notification: ", err)
+				continue
 			}
 
 			txChan <- &txNotificationGrpc{resp}
@@ -54,7 +62,13 @@ func (nm *notificationsManagerGrpc) UtxoChannel() (chan ports.UtxoNotification, 
 		for {
 			resp, err := stream.Recv()
 			if err != nil {
-				return
+				if err == io.EOF {
+					close(utxoChan)
+					break
+				}
+
+				logrus.Debug("Error receiving utxo notification: ", err)
+				continue
 			}
 
 			utxoChan <- &utxoNotificationGrpc{resp}

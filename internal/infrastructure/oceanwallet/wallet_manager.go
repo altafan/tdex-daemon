@@ -19,7 +19,7 @@ func newWalletManagerGrpc(conn *grpc.ClientConn) ports.WalletManager {
 	}
 }
 
-func (wm *walletManagerGrpc) GenSeed(ctx context.Context) (mnemonic []string, err error) {
+func (wm *walletManagerGrpc) GenSeed(ctx context.Context) ([]string, error) {
 	req := &oceanv1alpha.GenSeedRequest{}
 	resp, err := wm.client.GenSeed(ctx, req)
 	if err != nil {
@@ -29,13 +29,13 @@ func (wm *walletManagerGrpc) GenSeed(ctx context.Context) (mnemonic []string, er
 	return strings.Split(resp.GetMnemonic(), " "), nil
 }
 
-func (wm *walletManagerGrpc) CreateWallet(ctx context.Context, mnemonic []string, passphrase string, chMessages chan string) (err error) {
+func (wm *walletManagerGrpc) CreateWallet(ctx context.Context, mnemonic []string, passphrase string, chMessages chan string) error {
 	req := &oceanv1alpha.CreateWalletRequest{
 		Mnemonic: strings.Join(mnemonic, " "),
 		Password: passphrase,
 	}
 
-	_, err = wm.client.CreateWallet(ctx, req)
+	_, err := wm.client.CreateWallet(ctx, req)
 	return err
 }
 
