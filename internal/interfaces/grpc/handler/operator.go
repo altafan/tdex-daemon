@@ -482,6 +482,7 @@ func (h *operatorHandler) getMarketReport(
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+
 	timeRange, err := parseTimeRange(req.GetTimeRange())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
