@@ -37,6 +37,15 @@ func (ws webhookStore) Init(password string) error {
 	return nil
 }
 
+func (ws webhookStore) IsInit() bool {
+	buckets, err := ws.store.ListBuckets()
+	if err != nil || len(buckets) == 0 {
+		return false
+	}
+
+	return true
+}
+
 func (ws webhookStore) Lock() {
 	ws.store.Lock()
 }

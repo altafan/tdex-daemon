@@ -568,6 +568,10 @@ func (s *service) onInit(password string) {
 	); err != nil {
 		log.WithError(err).Warn("failed to create macaroons")
 	}
+
+	if err := s.opts.AppConfig.SecurePubSub.Store().Init(password); err != nil {
+		log.WithError(err).Warn("failed to init SecurePubSub")
+	}
 }
 
 func (s *service) onUnlock(password string) {
@@ -596,6 +600,17 @@ func (s *service) onUnlock(password string) {
 	if err := s.start(!withWalletOnly); err != nil {
 		log.WithError(err).Warn("failed to load handlers to interface after unlock")
 	}
+
+	if !s.opts.AppConfig.SecurePubSub.Store().IsInit() {
+		if err := s.opts.AppConfig.SecurePubSub.Store().Init(password); err != nil {
+			log.WithError(err).Warn("failed to Init SecurePubSub")
+		}
+	} else {
+		if err := s.opts.AppConfig.SecurePubSub.Store().Unlock(password); err != nil {
+			log.WithError(err).Warn("failed to Unlock SecurePubSub")
+		}
+	}
+
 }
 
 func (s *service) onLock(_ string) {

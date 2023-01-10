@@ -17,6 +17,8 @@ type Subscription interface {
 type PubSubStore interface {
 	// Init initialize the store with an optional encryption password.
 	Init(password string) error
+	// IsInit check if PubSubStore is initialised
+	IsInit() bool
 	// IsLocked returns whether the store is locked.
 	IsLocked() bool
 	// Lock locks the store.
