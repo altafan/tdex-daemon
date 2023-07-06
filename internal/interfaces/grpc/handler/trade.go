@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
 	tdexv2 "github.com/tdex-network/tdex-daemon/api-spec/protobuf/gen/tdex/v2"
 	"github.com/tdex-network/tdex-daemon/internal/core/application"
 	"github.com/tdex-network/tdex-daemon/internal/core/ports"
@@ -155,6 +156,7 @@ func (t tradeHandler) getMarketPrice(
 func (t tradeHandler) previewTrade(
 	ctx context.Context, req *tdexv2.PreviewTradeRequest,
 ) (*tdexv2.PreviewTradeResponse, error) {
+	log.Info("preview request:\n", req.String())
 	market, err := parseMarket(req.GetMarket())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -204,6 +206,7 @@ func (t tradeHandler) previewTrade(
 func (t tradeHandler) proposeTrade(
 	ctx context.Context, req *tdexv2.ProposeTradeRequest,
 ) (*tdexv2.ProposeTradeResponse, error) {
+	log.Info("proposal request:\n", req.String())
 	market, err := parseMarket(req.GetMarket())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
